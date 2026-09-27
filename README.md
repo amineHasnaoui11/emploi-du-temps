@@ -1,0 +1,76 @@
+# Emploi du temps — Année scolaire 2026-2027
+
+Refonte du planning de septembre 2026 et construction du planning complet d'octobre 2026.
+
+## Contenu du dépôt
+
+| Dossier | Fichier | Rôle |
+|---|---|---|
+| `source/` | `RS_Septembre_2026-2027_ORIGINAL.xlsx` | Fichier d'origine, **strictement intact** (md5 identique à l'envoi) |
+| `livrables/` | `RS_2026-2027_Planning_Septembre-Octobre.xlsx` | **Le classeur à utiliser** |
+| `livrables/` | `RS_2026-2027_Planning_Septembre-Octobre.pdf` | Export PDF de contrôle (44 pages, A4) |
+| `outils/` | `parse.py`, `analyse.py`, `analyse2.py` | Lecture et diagnostic du fichier d'origine |
+| `outils/` | `classify.py` | Détection des rythmes fixe / quinzaine A / quinzaine B |
+| `outils/` | `rows.py`, `build.py` | Construction du classeur final |
+
+Les scripts sont reproductibles : `pip install openpyxl` puis
+`python3 parse.py && python3 analyse.py && python3 classify.py && python3 rows.py && python3 build.py`.
+
+## Structure du classeur (13 feuilles)
+
+1. **Sommaire** — navigation cliquable, légende, mode d'emploi, points d'attention.
+2. **Planning** — *table de référence*. 1 ligne = 1 séance (701 lignes), 26 colonnes,
+   filtres, volets figés, menus déroulants, contrôles de conflit par ligne.
+   **C'est la seule feuille où l'on saisit.**
+3. **Référentiels** — classes, matières, enseignants, salles, modes, rythmes, calendrier des semaines.
+4. à 10. **S1 … S7** — 7 grilles hebdomadaires imprimables (classes × jours).
+   Leur contenu est **calculé par formules** depuis `Planning` : aucune double saisie.
+5. **Vue Enseignants** — séances et heures par enseignant et par semaine.
+6. **Contrôles** — 21 contrôles automatiques + les 14 décisions de construction d'octobre.
+7. **Récapitulatif** — indicateurs par semaine, cycle, matière et jour.
+
+## Règle des semaines A / B
+
+Les séances par quinzaine alternent sur deux semaines. La parité a été déduite
+en comparant les 3 semaines de septembre :
+
+| Parité | Semaines |
+|---|---|
+| **A** | 14/09 · **28/09 (référence)** · 12/10 · 26/10 |
+| **B** | 21/09 · 05/10 · 19/10 |
+
+Construction d'octobre : semaine A = 81 séances fixes + 20 quinzaine A = **101**,
+semaine B = 81 séances fixes + 18 quinzaine B = **99**.
+
+## Garanties vérifiées
+
+- 301 / 301 séances d'origine présentes, **0 altérée** (le texte brut de chaque cellule
+  d'origine est conservé en colonne Y de `Planning`, avec sa référence en colonne Z).
+- 0 conflit d'enseignant, 0 conflit de classe, 0 doublon, sur les 7 semaines.
+- 0 erreur de formule dans l'ensemble du classeur (recalcul complet vérifié).
+- Dates et jours conformes au calendrier réel d'octobre 2026.
+- Impression : A4, 1 page de large, **un cycle par page**, en-têtes répétés, 44 pages au total.
+
+## Points nécessitant un arbitrage
+
+Détaillés en bas de la feuille **Contrôles**. Les trois principaux :
+
+1. **Physique (Melek)** — 7éme (A) mercredi, 8éme (A) vendredi, 9éme (A) lundi :
+   portent la mention « /par quinzaine » mais sont présentes les 3 semaines.
+   Traitées comme **hebdomadaires**.
+2. **STI (Aymen) en 3éme INFO** — dimanche en S2, lundi dans la semaine de référence.
+   Traitée comme **hebdomadaire le lundi**.
+3. **Jeudi 15/10/2026** — Fête de l'Évacuation. Les 12 séances sont **maintenues** et signalées.
+
+Par ailleurs, **Salle** et **Mode (présentiel / en ligne)** sont absents du fichier d'origine :
+les colonnes existent mais restent vides. Aucune valeur n'a été inventée.
+
+## Préparer novembre
+
+1. Dupliquer une grille d'octobre, renommer l'onglet.
+2. Mettre à jour la cellule **J4** (ligne masquée) avec le nouveau code de semaine.
+3. Ajouter la semaine dans **Référentiels** (code, dates, parité).
+4. Dans **Planning**, filtrer une semaine de même parité, copier ses lignes, les coller
+   et changer *Semaine* / *Période* / *Date*.
+
+La grille se remplit alors toute seule.
