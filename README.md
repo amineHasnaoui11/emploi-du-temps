@@ -7,8 +7,10 @@ Refonte du planning de septembre 2026 et construction du planning complet d'octo
 | Dossier | Fichier | Rôle |
 |---|---|---|
 | `source/` | `RS_Septembre_2026-2027_ORIGINAL.xlsx` | Fichier d'origine, **strictement intact** (md5 identique à l'envoi) |
-| `livrables/` | `RS_2026-2027_Planning_Septembre-Octobre.xlsx` | **Le classeur à utiliser** |
-| `livrables/` | `RS_2026-2027_Planning_Septembre-Octobre.pdf` | Export PDF de contrôle (44 pages, A4) |
+| `livrables/` | `RS_2026-2027_Planning_Septembre-Octobre.xlsx` | **Le classeur complet** (septembre + octobre, 13 feuilles) |
+| `livrables/` | `RS_2026-2027_Planning_Septembre-Octobre.pdf` | Son export PDF (44 pages, A4) |
+| `livrables/` | `RS_2026-2027_Octobre_seul.xlsx` | **Octobre seul** : 4 semaines, rien d'autre, contenu figé |
+| `livrables/` | `RS_2026-2027_Octobre_seul.pdf` | Son export PDF (16 pages, A4) |
 | `outils/` | `parse.py`, `analyse.py`, `analyse2.py` | Lecture et diagnostic du fichier d'origine |
 | `outils/` | `classify.py` | Détection des rythmes fixe / quinzaine A / quinzaine B |
 | `outils/` | `rows.py`, `build.py` | Construction du classeur final |
@@ -25,6 +27,8 @@ Les scripts sont reproductibles : `pip install openpyxl` puis
 3. **Référentiels** — classes, matières, enseignants, salles, modes, rythmes, calendrier des semaines.
 4. à 10. **S1 … S7** — 7 grilles hebdomadaires imprimables (classes × jours).
    Leur contenu est **calculé par formules** depuis `Planning` : aucune double saisie.
+   Une case = **une seule séance** : 1re ligne l'horaire, 2e la matière, 3e l'enseignant.
+   Une classe ayant deux séances le même jour occupe deux sous-lignes.
 5. **Vue Enseignants** — séances et heures par enseignant et par semaine.
 6. **Contrôles** — 21 contrôles automatiques + les 14 décisions de construction d'octobre.
 7. **Récapitulatif** — indicateurs par semaine, cycle, matière et jour.
@@ -74,3 +78,31 @@ les colonnes existent mais restent vides. Aucune valeur n'a été inventée.
    et changer *Semaine* / *Période* / *Date*.
 
 La grille se remplit alors toute seule.
+
+## Code couleur des grilles
+
+Le fond de chaque case indique la **famille de matières** :
+
+| Famille | Matières |
+|---|---|
+| Arabe | Arabe, عربية |
+| Français | Français |
+| Langues étrangères | Anglais, Espagnol, Italien |
+| Mathématiques | Math, رياضيات |
+| Sciences | Physique, فيزياء, SVT, Éveil scientifique, إيقاظ علمي |
+| Sciences humaines | Histoire, Géographie, Philo |
+| Économie / Gestion | Eco, Gestion |
+| Informatique | Informatique, ALGO, STI |
+
+La colonne *Classe* garde la couleur du **cycle**. Les repères `◆ Q-A` / `◆ Q-B`
+marquent les séances par quinzaine, `◆ PONCTUEL` les séances non récurrentes.
+
+Le code couleur est posé par **mise en forme conditionnelle** : si vous changez la
+matière d'une séance dans `Planning`, la couleur suit toute seule.
+
+## Le fichier « Octobre seul »
+
+`RS_2026-2027_Octobre_seul.xlsx` ne contient que les 4 grilles d'octobre, avec un
+**contenu figé** (aucune formule, aucun lien externe). Il est autonome : rien à
+recalculer, rien à activer. C'est celui à diffuser à l'équipe.
+Son contenu a été comparé cellule à cellule avec le fichier complet : identique.

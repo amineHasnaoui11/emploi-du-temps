@@ -30,6 +30,17 @@ ALERT_BG = 'FDEDEC'; ALERT_FG='B03A2E'
 OK_FG    = '1E7B4D'
 QUINZ_FG = '8A5A00'
 
+# --- Familles de matières : 8 couleurs pastel, texte foncé lisible sur chacune ---
+FAMILLES=[('Arabe',              'FBE3DC', ['Arabe','عربية']),
+          ('Français',           'DCE8F7', ['Français']),
+          ('Langues étrangères', 'DFF0E4', ['Anglais','Espagnol','Italien']),
+          ('Mathématiques',      'FDF0D5', ['Math','رياضيات']),
+          ('Sciences',           'E2E6F5', ['Physique','فيزياء','SVT','Éveil scientifique','إيقاظ علمي']),
+          ('Sciences humaines',  'F3E1EE', ['Histoire','Géographie','Philo']),
+          ('Économie / Gestion', 'FAE6CF', ['Eco','Gestion']),
+          ('Informatique',       'DCEFF2', ['Informatique','ALGO','STI'])]
+FAM_OF={m:(n,c) for n,c,lst in FAMILLES for m in lst}
+
 F='Arial'
 def font(sz=10,b=False,c='1B2A41',i=False): return Font(name=F,size=sz,bold=b,color=c,italic=i)
 def fill(c): return PatternFill('solid',fgColor=c)
@@ -120,10 +131,11 @@ for i,r in enumerate(rows):
     P.cell(x,21,f'=IF(COUNTIFS($D${R0}:$D${R1},$D{x},$J${R0}:$J${R1},$J{x},$F${R0}:$F${R1},$F{x},$K${R0}:$K${R1},$K{x})>1,"⚠ DOUBLON","")').alignment=CTR
     P.cell(x,22,f'=COUNTIFS($A${R0}:$A{x},$A{x},$J${R0}:$J{x},$J{x},$E${R0}:$E{x},$E{x})').alignment=CTR
     P.cell(x,23,f'=$A{x}&"|"&$J{x}&"|"&$E{x}&"|"&$V{x}').alignment=LFT
+    # 1 ligne = horaire (+ repère quinzaine) / 2 = matière / 3 = enseignant / puis salle, mode, note
     P.cell(x,24,(f'=TEXT($F{x},"hh:mm")&" - "&TEXT($G{x},"hh:mm")'
-                 f'&IF($P{x}="Quinzaine A"," · [Q-A]",IF($P{x}="Quinzaine B"," · [Q-B]",IF($P{x}="Exception"," · [PONCTUEL]","")))'
-                 f'&CHAR(10)&$K{x}&" · "&$M{x}'
-                 f'&IF($N{x}<>"",CHAR(10)&"Salle "&$N{x},"")&IF($O{x}="En ligne",CHAR(10)&"[EN LIGNE]","")'
+                 f'&IF($P{x}="Quinzaine A","   ◆ Q-A",IF($P{x}="Quinzaine B","   ◆ Q-B",IF($P{x}="Exception","   ◆ PONCTUEL","")))'
+                 f'&CHAR(10)&$K{x}&CHAR(10)&$M{x}'
+                 f'&IF($N{x}<>"",CHAR(10)&"Salle "&$N{x},"")&IF($O{x}="En ligne",CHAR(10)&"◆ EN LIGNE","")'
                  f'&IF($R{x}<>"",CHAR(10)&$R{x},"")')).alignment=LTOP
     P.cell(x,25,r['brut']).alignment=LFT
     P.cell(x,26,r['src']).alignment=LFT
@@ -137,6 +149,9 @@ P.auto_filter.ref=f'A3:{CL(len(HDR))}{R1}'
 rng=f'A{R0}:R{R1}'
 for cy,f_ in CYC_FILL.items():
     P.conditional_formatting.add(rng, FormulaRule(formula=[f'$I{R0}="{cy}"'], fill=fill(f_), stopIfTrue=False))
+for _nom,_col,_mats in FAMILLES:   # repère couleur de la famille de matières
+    _test='+'.join(f'($K{R0}="{m}")' for m in _mats)
+    P.conditional_formatting.add(f'K{R0}:L{R1}', FormulaRule(formula=[f'({_test})>0'], fill=fill(_col), stopIfTrue=True))
 P.conditional_formatting.add(f'P{R0}:P{R1}', FormulaRule(formula=[f'LEFT($P{R0},9)="Quinzaine"'], font=font(9,True,QUINZ_FG)))
 P.conditional_formatting.add(f'P{R0}:P{R1}', FormulaRule(formula=[f'$P{R0}="Exception"'], font=font(9,True,ALERT_FG)))
 P.conditional_formatting.add(f'Q{R0}:Q{R1}', FormulaRule(formula=[f'$Q{R0}="Généré (octobre)"'], font=font(9,False,ACC)))
@@ -226,48 +241,62 @@ for col,nm,strict in (('J','LST_Classes',False),('K','LST_Matieres',False),('M',
     P.add_data_validation(dv); dv.add(f'{col}{R0}:{col}{R1+200}')
 
 # ==========================================================
-# 3) GRILLES HEBDOMADAIRES (7 feuilles, formules vivantes)
+# 3) GRILLES HEBDOMADAIRES — une séance par ligne
 # ==========================================================
 from openpyxl.worksheet.pagebreak import Break
 import math
-CPL=23  # caractères par ligne dans une colonne jour
+CPL=21          # caractères tenant sur une ligne dans une colonne « jour »
+FS_GRID=11      # taille de police des cases
+
 _byday={}
 for _r in rows:
     _byday.setdefault((_r['semaine'],_r['classe'],_r['jour']),[]).append(_r)
-def _lines(r):
-    tag={'Quinzaine A':' · [Q-A]','Quinzaine B':' · [Q-B]','Exception':' · [PONCTUEL]'}.get(r['rythme'],'')
-    n=max(1,math.ceil(len('13:30 - 15:00'+tag)/CPL))
-    n+=max(1,math.ceil(len(f"{r['matiere']} · {r['prof']}")/CPL))
-    if r['notes']: n+=max(1,math.ceil(len(r['notes'])/CPL))
-    return n
-def rowh(code,cls):
-    mx=0
-    for day in DAYS:
-        lst=_byday.get((code,cls,day),[])
-        if not lst: continue
-        mx=max(mx, sum(_lines(r) for r in lst)+(len(lst)-1))
-    return max(42, (mx+1)*14.5+8)   # +1 ligne de marge (salle / mode à venir)
-MOIS_FR={9:'septembre',10:'octobre',11:'novembre'}
-grid_sheets=[]
-for code,start,par,per,shname,mois in WEEKS:
-    sd=datetime.date.fromisoformat(start)
-    G=wb.create_sheet(shname); grid_sheets.append((shname,code,per,par,mois))
-    G.column_dimensions['A'].width=19
-    for k in range(2,9): G.column_dimensions[CL(k)].width=27
+for _k in _byday: _byday[_k].sort(key=lambda r:r['debut'])
+
+def nsub(code,cls):
+    """Nombre de sous-lignes nécessaires : le maximum de séances sur un même jour."""
+    return max([len(_byday.get((code,cls,d),[])) for d in DAYS]+[1])
+
+def label(r):
+    tag={'Quinzaine A':'   ◆ Q-A','Quinzaine B':'   ◆ Q-B','Exception':'   ◆ PONCTUEL'}.get(r['rythme'],'')
+    p=[f"{r['debut']} - {r['fin']}"+tag, r['matiere'], r['prof']]
+    if r['notes']: p.append(r['notes'])
+    return '\n'.join(p)
+
+def subrow_h(code,cls,n):
+    """Hauteur d'une sous-ligne = nb de lignes de texte de la case la plus chargée ce jour-là."""
+    mx=3
+    for d in DAYS:
+        lst=_byday.get((code,cls,d),[])
+        if len(lst)<n: continue
+        r=lst[n-1]
+        L=1+max(1,math.ceil(len(r['matiere'])/CPL))+max(1,math.ceil(len(r['prof'])/CPL))
+        if r['notes']: L+=max(1,math.ceil(len(r['notes'])/CPL))
+        mx=max(mx,L)
+    return mx*15.2+7
+
+def build_grid(wbk, week, static, with_note=True):
+    """static=True -> texte figé (fichier autonome) ; sinon formules liées à Planning."""
+    code,start_iso,par,per,shname,mois = week
+    sd=datetime.date.fromisoformat(start_iso)
+    G=wbk.create_sheet(shname)
+    G.column_dimensions['A'].width=20
+    for k in range(2,9): G.column_dimensions[CL(k)].width=22
     ref=' — SEMAINE DE RÉFÉRENCE' if code=='S3' else ''
-    gen='généré automatiquement' if mois=='Octobre' else 'données d’origine'
+    src=('Contenu figé.' if static else
+         ('Contenu généré automatiquement depuis la feuille Planning.' if mois=='Octobre'
+          else 'Contenu issu du fichier d’origine, repris depuis la feuille Planning.'))
     title_block(G,'H', f"{code} · {per.upper()}   |   SEMAINE {par}{ref}",
-      "Lecture d’une case : horaire · matière · enseignant.   [Q-A] / [Q-B] = séance par quinzaine (semaine A / semaine B).   "
-      f"[EN LIGNE] = séance à distance.   Case vide = aucune séance.   Contenu {gen} depuis la feuille Planning.", h2=26)
-    # en-têtes de jours
-    c=G.cell(3,1,'Classe / Groupe'); c.font=font(10,True,WHITE); c.fill=fill(INK2); c.alignment=CTR; c.border=BOX_M
+      "Chaque case = une séance : 1re ligne l’horaire, 2e la matière, 3e l’enseignant.   "
+      "La couleur indique la famille de matières.   ◆ Q-A / ◆ Q-B = séance par quinzaine.   "
+      f"Case grise = aucune séance.   {src}", h2=26)
+    c=G.cell(3,1,'Classe / Groupe'); c.font=font(11,True,WHITE); c.fill=fill(INK2); c.alignment=CTR; c.border=BOX_M
     for k,day in enumerate(DAYS):
         dd=sd+datetime.timedelta(days=k)
         c=G.cell(3,2+k,f"{day}\n{dd.strftime('%d/%m')}")
-        c.font=font(10,True,WHITE); c.fill=fill(ACC if k>=5 else INK2); c.alignment=CTR; c.border=BOX_M
-    G.row_dimensions[3].height=34
-    # ligne technique masquée
-    G.cell(4,1,'__jour')
+        c.font=font(11,True,WHITE); c.fill=fill(ACC if k>=5 else INK2); c.alignment=CTR; c.border=BOX_M
+    G.row_dimensions[3].height=36
+    G.cell(4,1,'__jour')                                   # ligne technique masquée
     for k,day in enumerate(DAYS): G.cell(4,2+k,day)
     G.cell(4,10,code)
     G.row_dimensions[4].hidden=True; G.row_dimensions[4].height=3
@@ -276,36 +305,51 @@ for code,start,par,per,shname,mois in WEEKS:
         if x>5: breaks.append(x-1)
         G.merge_cells(start_row=x,start_column=1,end_row=x,end_column=8)
         c=G.cell(x,1,f"CYCLE {cy.upper()}   ({len(classes)} classes)")
-        c.font=font(9,True,WHITE); c.alignment=Alignment(horizontal='left',vertical='center',indent=1)
+        c.font=font(10,True,WHITE); c.alignment=Alignment(horizontal='left',vertical='center',indent=1)
         for k in range(1,9): G.cell(x,k).fill=fill(CYC_BAND[cy]); G.cell(x,k).border=BOX_M
-        G.row_dimensions[x].height=19; x+=1
+        G.row_dimensions[x].height=21; x+=1
         for cls in classes:
-            c=G.cell(x,1,cls); c.font=font(10,True,INK); c.fill=fill(CYC_FILL[cy]); c.alignment=CTR; c.border=BOX_M
-            for k in range(7):
-                col=CL(2+k)
-                key=f'$J$4&"|"&$A{x}&"|"&{col}$4&"|"'
-                sl=[f'IFERROR(VLOOKUP({key}&"1",Planning!$W:$X,2,0),"")']
-                for n in (2,3):
-                    sl.append(f'IF(ISNA(VLOOKUP({key}&"{n}",Planning!$W:$X,2,0)),"",CHAR(10)&CHAR(10)&VLOOKUP({key}&"{n}",Planning!$W:$X,2,0))')
-                cc=G.cell(x,2+k,'='+'&'.join(sl))
-                cc.font=font(10); cc.alignment=LTOP; cc.border=BOX
-                cc.fill=fill(WEEKEND if k>=5 else WHITE)
-            G.row_dimensions[x].height=rowh(code,cls); x+=1
+            nb=nsub(code,cls); x0=x
+            for n in range(1,nb+1):
+                for k,day in enumerate(DAYS):
+                    col=CL(2+k)
+                    if static:
+                        lst=_byday.get((code,cls,day),[])
+                        v=label(lst[n-1]) if len(lst)>=n else None
+                    else:
+                        key=f'$J$4&"|"&$A${x0}&"|"&{col}$4&"|{n}"'
+                        v=f'=IFERROR(VLOOKUP({key},Planning!$W:$X,2,0),"")'
+                    cc=G.cell(x,2+k,v)
+                    cc.font=font(FS_GRID); cc.alignment=LTOP; cc.border=BOX
+                    cc.fill=fill(WEEKEND if k>=5 else WHITE)
+                G.row_dimensions[x].height=subrow_h(code,cls,n); x+=1
+            if nb>1: G.merge_cells(start_row=x0,start_column=1,end_row=x-1,end_column=1)
+            c=G.cell(x0,1,cls); c.font=font(11,True,INK); c.fill=fill(CYC_FILL[cy]); c.alignment=CTR; c.border=BOX_M
+            for r2 in range(x0,x):
+                G.cell(r2,1).fill=fill(CYC_FILL[cy]); G.cell(r2,1).border=BOX_M
     last=x-1
     rg=f'B5:H{last}'
-    # Les règles de couleur ne s'appliquent qu'aux cases contenant UNE SEULE séance :
-    # dans une case à deux séances, colorer tout induirait en erreur. Les tags [Q-A]/[Q-B]
-    # restent portés par chaque séance et suffisent à la lecture.
-    SOLO='ISERROR(SEARCH(CHAR(10)&CHAR(10),B5))'
-    G.conditional_formatting.add(rg, FormulaRule(formula=[f'AND({SOLO},ISNUMBER(SEARCH("[PONCTUEL]",B5)))'], fill=fill(ALERT_BG), font=font(10,True,ALERT_FG), stopIfTrue=True))
-    G.conditional_formatting.add(rg, FormulaRule(formula=[f'AND({SOLO},ISNUMBER(SEARCH("[Q-",B5)))'], font=font(10,False,QUINZ_FG), stopIfTrue=True))
-    G.conditional_formatting.add(rg, FormulaRule(formula=[f'AND({SOLO},ISNUMBER(SEARCH("[EN LIGNE]",B5)))'], font=font(10,False,ACC), stopIfTrue=True))
+    # Une case = une seule séance : la couleur de famille est donc toujours exacte.
+    # Les règles « famille » passent en premier ; le repère quinzaine suit et s'y ajoute
+    # dans Excel (dans LibreOffice, seule la couleur de fond s'applique, le repère ◆ Q-A
+    # restant lisible dans le texte).
+    for _nom,_col,_mats in FAMILLES:
+        t='+'.join(f'ISNUMBER(SEARCH(CHAR(10)&"{m}"&CHAR(10),B5))' for m in _mats)
+        G.conditional_formatting.add(rg, FormulaRule(formula=[f'({t})>0'], fill=fill(_col)))
+    G.conditional_formatting.add(rg, FormulaRule(formula=['ISNUMBER(SEARCH("◆ PONCTUEL",B5))'], font=font(FS_GRID,True,ALERT_FG)))
+    G.conditional_formatting.add(rg, FormulaRule(formula=['ISNUMBER(SEARCH("◆ Q-",B5))'], font=font(FS_GRID,True,QUINZ_FG)))
     G.conditional_formatting.add(rg, FormulaRule(formula=['LEN(B5)=0'], fill=fill(GREY_L), stopIfTrue=True))
     G.freeze_panes='B5'
-    for b in breaks: G.row_breaks.append(Break(id=b))
+    for br in breaks: G.row_breaks.append(Break(id=br))
     setup_print(G, titles='1:3', area=f'A1:H{last}',
-                header=f"{per}", footer=f'RS 2026-2027 · {code} ({par})')
+                header=f"{per}", footer=f'RS 2026-2027 · {code} (semaine {par})')
     G.sheet_properties.tabColor = INK2 if code=='S3' else ('8494A7' if mois=='Septembre' else ACC)
+    return shname
+
+grid_sheets=[]
+for _w in WEEKS:
+    build_grid(wb,_w,static=False)
+    grid_sheets.append((_w[4],_w[0],_w[3],_w[2],_w[5]))
 
 PL=f'Planning!'
 A_=f'{PL}$A${R0}:$A${R1}'; C_=f'{PL}$C${R0}:$C${R1}'; D_=f'{PL}$D${R0}:$D${R1}'
@@ -649,20 +693,32 @@ for name,desc,cnt,typ in NAV:
 x+=1
 
 x=sband(x,'LÉGENDE')
-LEG=[('Primaire','Couleur de fond — 4éme, 5éme, 6éme Pilote (A), 6éme (B)','','',''),
-     ('Collège','Couleur de fond — 7éme, 8éme et 9éme (8 groupes)','','',''),
-     ('Secondaire','Couleur de fond — 1ére, 2éme et 3éme (8 groupes)','','',''),
-     ('Bac','Couleur de fond — Bac Eco, Bac SCE, Bac INFO','','',''),
-     ('[Q-A]','Séance par quinzaine, semaines A : 14/09 · 28/09 · 12/10 · 26/10','','',''),
-     ('[Q-B]','Séance par quinzaine, semaines B : 21/09 · 05/10 · 19/10','','',''),
-     ('[EN LIGNE]','Séance à distance (à renseigner dans la colonne Mode de Planning)','','',''),
-     ('[PONCTUEL]','Séance exceptionnelle, non récurrente (ex. rattrapage)','','',''),
-     ('Case vide / grisée','Aucune séance sur ce créneau','','',''),
-     ('⚠ en rouge','Conflit horaire, doublon ou anomalie détectée automatiquement','','','')]
+LEG=([('__TITRE__','COULEUR DES CASES — famille de matières','','','')]
+   + [(_n,'Matières : '+', '.join(_m),'','','') for _n,_c,_m in FAMILLES]
+   + [('__TITRE__','COULEUR DE LA COLONNE CLASSE — cycle','','','')]
+   + [('Primaire','4éme, 5éme, 6éme Pilote (A), 6éme (B)','','',''),
+      ('Collège','7éme, 8éme et 9éme (8 groupes)','','',''),
+      ('Secondaire','1ére, 2éme et 3éme (8 groupes)','','',''),
+      ('Bac','Bac Eco, Bac SCE, Bac INFO','','','')]
+   + [('__TITRE__','REPÈRES DANS LE TEXTE','','','')]
+   + [('◆ Q-A','Séance par quinzaine, semaines A : 14/09 · 28/09 · 12/10 · 26/10','','',''),
+      ('◆ Q-B','Séance par quinzaine, semaines B : 21/09 · 05/10 · 19/10','','',''),
+      ('◆ EN LIGNE','Séance à distance (à renseigner dans la colonne Mode de Planning)','','',''),
+      ('◆ PONCTUEL','Séance exceptionnelle, non récurrente (ex. rattrapage)','','',''),
+      ('Case grisée','Aucune séance sur ce créneau','','',''),
+      ('⚠ en rouge','Conflit horaire, doublon ou anomalie détectée automatiquement','','','')])
+FAM_COL={_n:_c for _n,_c,_m in FAMILLES}
 for i,row_ in enumerate(LEG):
     lab=row_[0]
+    if lab=='__TITRE__':                      # sous-titre de bloc dans la légende
+        So.merge_cells(start_row=x,start_column=2,end_row=x,end_column=5)
+        c=So.cell(x,2,row_[1]); c.font=font(9,True,WHITE); c.fill=fill(INK2)
+        c.alignment=Alignment(horizontal='left',vertical='center',indent=1); c.border=BOX_M
+        So.row_dimensions[x].height=16; x+=1; continue
     c=So.cell(x,2,lab); c.alignment=LFT; c.border=BOX
-    if lab in CYC_FILL:                       # pastille réelle de la couleur du cycle
+    if lab in FAM_COL:                        # pastille réelle de la couleur de la famille
+        c.font=font(9,True,INK); c.fill=fill(FAM_COL[lab])
+    elif lab in CYC_FILL:                     # pastille réelle de la couleur du cycle
         c.font=font(9,True,INK); c.fill=fill(CYC_FILL[lab])
     else:
         c.font=font(9,True,QUINZ_FG if 'Q-' in lab else (ALERT_FG if '⚠' in lab or 'PONCTUEL' in lab else INK))
@@ -711,4 +767,16 @@ wb.active=0
 
 wb.save('RS_2026-2027_Planning_Septembre-Octobre.xlsx')
 print("OK -> RS_2026-2027_Planning_Septembre-Octobre.xlsx")
-print("Feuilles:", wb.sheetnames)
+print("  feuilles:", wb.sheetnames)
+
+# ==========================================================
+# 8) SECOND CLASSEUR : les 4 semaines d'octobre, rien d'autre
+#    Contenu figé : fichier autonome, aucun recalcul nécessaire.
+# ==========================================================
+wo = Workbook(); wo.remove(wo.active)
+for _w in WEEKS:
+    if _w[5]=='Octobre': build_grid(wo,_w,static=True)
+wo.active=0
+wo.save('RS_2026-2027_Octobre_seul.xlsx')
+print("OK -> RS_2026-2027_Octobre_seul.xlsx")
+print("  feuilles:", wo.sheetnames)
