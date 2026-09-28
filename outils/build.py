@@ -147,13 +147,12 @@ for i,r in enumerate(rows):
                  f'$F${R0}:$F${R1},$F{x},$G${R0}:$G${R1},$G{x},$K${R0}:$K${R1},$K{x},$M${R0}:$M${R1},$M{x}),"⚠ INCOHÉRENT","")')).alignment=CTR
     P.cell(x,28,f'=COUNTIFS($A${R0}:$A{x},$A{x},$J${R0}:$J{x},$J{x},$E${R0}:$E{x},$E{x})').alignment=CTR
     P.cell(x,29,f'=$A{x}&"|"&$J{x}&"|"&$E{x}&"|"&$AB{x}').alignment=LFT
-    P.cell(x,30,(f'=TEXT($F{x},"hh:mm")&" - "&TEXT($G{x},"hh:mm")'
-                 f'&IF(OR($P{x}="Quinzaine A",AND($P{x}="Hebdo · groupes alternés",$C{x}="A")),"   ◆ Q-A",'
-                 f'IF(OR($P{x}="Quinzaine B",AND($P{x}="Hebdo · groupes alternés",$C{x}="B")),"   ◆ Q-B",'
-                 f'IF($P{x}="Exception","   ◆ PONCTUEL","")))'
-                 f'&IF($W{x}="Oui","   ◆ OPTION","")'
+    P.cell(x,30,(f'=TEXT($F{x},"hh:mm")&"-"&TEXT($G{x},"hh:mm")'
+                 f'&IF(OR($P{x}="Quinzaine A",AND($P{x}="Hebdo · groupes alternés",$C{x}="A"))," Q-A",'
+                 f'IF(OR($P{x}="Quinzaine B",AND($P{x}="Hebdo · groupes alternés",$C{x}="B"))," Q-B",'
+                 f'IF($P{x}="Exception"," PONCT.","")))'
+                 f'&IF($W{x}="Oui"," OPT","")'
                  f'&CHAR(10)&$K{x}&CHAR(10)&$M{x}'
-                 f'&IF($R{x}>1,CHAR(10)&"⊕ "&$Q{x},"")'
                  f'&IF($N{x}<>"",CHAR(10)&"Salle "&$N{x},"")&IF($O{x}="En ligne",CHAR(10)&"◆ EN LIGNE","")'
                  f'&IF($V{x}<>"",CHAR(10)&$V{x},"")')).alignment=LTOP
     P.cell(x,31,r['brut']).alignment=LFT
@@ -263,114 +262,171 @@ for col,nm,strict in (('J','LST_Classes',False),('K','LST_Matieres',False),('M',
     P.add_data_validation(dv); dv.add(f'{col}{R0}:{col}{R1+200}')
 
 # ==========================================================
-# 3) GRILLES HEBDOMADAIRES — une séance par ligne
+# 3) GRILLES HEBDOMADAIRES — une séance écrite UNE SEULE FOIS
+#    Une séance partagée entre plusieurs groupes occupe une cellule FUSIONNÉE
+#    verticalement sur les lignes de ces groupes, comme dans le fichier d'origine.
 # ==========================================================
 from openpyxl.worksheet.pagebreak import Break
 import math
-CPL=21          # caractères tenant sur une ligne dans une colonne « jour »
-FS_GRID=11      # taille de police des cases
+CPL=19          # caractères tenant sur une ligne (colonne « jour », gras 12 pt)
+FS_GRID=12      # taille de police des cases
+BLACK='000000'
 
 _byday={}
 for _r in rows:
     _byday.setdefault((_r['semaine'],_r['classe'],_r['jour']),[]).append(_r)
 for _k in _byday: _byday[_k].sort(key=lambda r:r['debut'])
 
-def nsub(code,cls):
-    """Nombre de sous-lignes nécessaires : le maximum de séances sur un même jour."""
-    return max([len(_byday.get((code,cls,d),[])) for d in DAYS]+[1])
+# séance -> liste ordonnée de ses groupes
+_groups={}
+for _r in rows:
+    _groups.setdefault((_r['semaine'],_r['seance']),set()).add(_r['classe'])
+_groups={k:sorted(v,key=CLASS_ORDER.index) for k,v in _groups.items()}
+
+def role_of(r):
+    """Place d'un groupe dans une séance partagée : haut / milieu / bas / seul."""
+    g=_groups[(r['semaine'],r['seance'])]
+    if len(g)==1: return 'seul'
+    i=g.index(r['classe'])
+    return 'haut' if i==0 else ('bas' if i==len(g)-1 else 'milieu')
 
 def tag_of(r):
-    """Repère de parité vu du GROUPE : une séance à groupes alternés a lieu chaque
-    semaine pour l'enseignant, mais une semaine sur deux pour chacun de ses groupes."""
-    ry=r['rythme']
-    if ry=='Quinzaine A' or (ry=='Hebdo · groupes alternés' and r['parite']=='A'): return '   ◆ Q-A'
-    if ry=='Quinzaine B' or (ry=='Hebdo · groupes alternés' and r['parite']=='B'): return '   ◆ Q-B'
-    if ry=='Exception': return '   ◆ PONCTUEL'
-    return ''
+    """Repère vu du GROUPE : une séance à groupes alternés revient une semaine sur deux."""
+    ry=r['rythme']; t=''
+    if ry=='Quinzaine A' or (ry=='Hebdo · groupes alternés' and r['parite']=='A'): t=' Q-A'
+    elif ry=='Quinzaine B' or (ry=='Hebdo · groupes alternés' and r['parite']=='B'): t=' Q-B'
+    elif ry=='Exception': t=' PONCT.'
+    if r.get('option')=='Oui': t+=' OPT'
+    return t
 
 def label(r):
-    p=[f"{r['debut']} - {r['fin']}"+tag_of(r)+('   ◆ OPTION' if r.get('option')=='Oui' else ''), r['matiere'], r['prof']]
-    if r['nbgr']>1: p.append('⊕ '+r['groupes'])     # séance partagée : on nomme les groupes réunis
+    # Le partage n'est plus écrit : la fusion de la cellule le montre déjà.
+    p=[f"{r['debut']}-{r['fin']}"+tag_of(r), r['matiere'], r['prof']]
     if r['notes']: p.append(r['notes'])
     return '\n'.join(p)
 
 def _nlines(r):
-    n =max(1,math.ceil(len(f"{r['debut']} - {r['fin']}"+tag_of(r)+('   ◆ OPTION' if r.get('option')=='Oui' else ''))/CPL))
+    n =max(1,math.ceil(len(f"{r['debut']}-{r['fin']}"+tag_of(r))/CPL))
     n+=max(1,math.ceil(len(r['matiere'])/CPL))+max(1,math.ceil(len(r['prof'])/CPL))
-    if r['nbgr']>1: n+=max(1,math.ceil(len('⊕ '+r['groupes'])/CPL))
-    if r['notes']:  n+=max(1,math.ceil(len(r['notes'])/CPL))
+    if r['notes']: n+=max(1,math.ceil(len(r['notes'])/CPL))
     return n
 
-def subrow_h(code,cls,n):
-    """Hauteur d'une sous-ligne = nb de lignes de texte de la case la plus chargée ce jour-là."""
-    mx=3
-    for d in DAYS:
-        lst=_byday.get((code,cls,d),[])
-        if len(lst)>=n: mx=max(mx,_nlines(lst[n-1]))
-    return mx*15.2+7
+def nsub(code,cls):
+    return max([len(_byday.get((code,cls,d),[])) for d in DAYS]+[1])
 
-def build_grid(wbk, week, static, with_note=True):
-    """static=True -> texte figé (fichier autonome) ; sinon formules liées à Planning."""
+def slots(code,cls,day,h):
+    """Attribue à chaque séance du jour sa sous-ligne.
+    Une séance partagée doit toucher le bord qui la relie au groupe voisin :
+    dernière sous-ligne si le groupe est en haut du partage, première s'il est en bas."""
+    lst=_byday.get((code,cls,day),[]); out={}; taken=set()
+    for r in lst:
+        ro=role_of(r)
+        if ro=='haut': sl=h-1
+        elif ro=='bas': sl=0
+        elif ro=='milieu': sl=0
+        else: continue
+        out[id(r)]=sl; taken.add(sl)
+    for r in lst:
+        if id(r) in out: continue
+        sl=next(k for k in range(h) if k not in taken)
+        out[id(r)]=sl; taken.add(sl)
+    return out
+
+def build_grid(wbk, week, static):
     code,start_iso,par,per,shname,mois = week
     sd=datetime.date.fromisoformat(start_iso)
     G=wbk.create_sheet(shname)
-    G.column_dimensions['A'].width=20
-    for k in range(2,9): G.column_dimensions[CL(k)].width=22
+    G.column_dimensions['A'].width=17
+    for k in range(2,9): G.column_dimensions[CL(k)].width=23
     ref=' — SEMAINE DE RÉFÉRENCE' if code=='S3' else ''
-    src=('Contenu figé.' if static else
-         ('Contenu généré automatiquement depuis la feuille Planning.' if mois=='Octobre'
-          else 'Contenu issu du fichier d’origine, repris depuis la feuille Planning.'))
     title_block(G,'H', f"{code} · {per.upper()}   |   SEMAINE {par}{ref}",
       "Une case = une séance : horaire / matière / enseignant.   Couleur = famille de matières.   "
-      "◆ Q-A ou Q-B = une semaine sur deux.   ⊕ = séance partagée.   ◆ OPTION = cours au choix.", h2=26)
+      "Une case fusionnée sur plusieurs classes = séance commune à ces groupes.   "
+      "Q-A ou Q-B = une semaine sur deux.   OPT = cours au choix.", h2=26)
     c=G.cell(3,1,'Classe / Groupe'); c.font=font(11,True,WHITE); c.fill=fill(INK2); c.alignment=CTR; c.border=BOX_M
     for k,day in enumerate(DAYS):
         dd=sd+datetime.timedelta(days=k)
         c=G.cell(3,2+k,f"{day}\n{dd.strftime('%d/%m')}")
         c.font=font(11,True,WHITE); c.fill=fill(ACC if k>=5 else INK2); c.alignment=CTR; c.border=BOX_M
     G.row_dimensions[3].height=36
-    G.cell(4,1,'__jour')                                   # ligne technique masquée
-    for k,day in enumerate(DAYS): G.cell(4,2+k,day)
-    G.cell(4,10,code)
-    G.row_dimensions[4].hidden=True; G.row_dimensions[4].height=3
-    x=5; breaks=[]
+
+    # --- répartition des lignes ---
+    H={}; TOP={}; x=5; breaks=[]; bands=[]
     for cy,classes in CYCLES:
         if x>5: breaks.append(x-1)
-        G.merge_cells(start_row=x,start_column=1,end_row=x,end_column=8)
-        c=G.cell(x,1,f"CYCLE {cy.upper()}   ({len(classes)} classes)")
-        c.font=font(10,True,WHITE); c.alignment=Alignment(horizontal='left',vertical='center',indent=1)
-        for k in range(1,9): G.cell(x,k).fill=fill(CYC_BAND[cy]); G.cell(x,k).border=BOX_M
-        G.row_dimensions[x].height=21; x+=1
+        bands.append((x,cy,len(classes))); x+=1
         for cls in classes:
-            nb=nsub(code,cls); x0=x
-            for n in range(1,nb+1):
-                for k,day in enumerate(DAYS):
-                    col=CL(2+k)
-                    if static:
-                        lst=_byday.get((code,cls,day),[])
-                        v=label(lst[n-1]) if len(lst)>=n else None
-                    else:
-                        key=f'$J$4&"|"&$A${x0}&"|"&{col}$4&"|{n}"'
-                        v=f'=IFERROR(VLOOKUP({key},Planning!$AC:$AD,2,0),"")'
-                    cc=G.cell(x,2+k,v)
-                    cc.font=font(FS_GRID); cc.alignment=LTOP; cc.border=BOX
-                    cc.fill=fill(WEEKEND if k>=5 else WHITE)
-                G.row_dimensions[x].height=subrow_h(code,cls,n); x+=1
-            if nb>1: G.merge_cells(start_row=x0,start_column=1,end_row=x-1,end_column=1)
-            c=G.cell(x0,1,cls); c.font=font(11,True,INK); c.fill=fill(CYC_FILL[cy]); c.alignment=CTR; c.border=BOX_M
-            for r2 in range(x0,x):
-                G.cell(r2,1).fill=fill(CYC_FILL[cy]); G.cell(r2,1).border=BOX_M
+            H[cls]=nsub(code,cls); TOP[cls]=x; x+=H[cls]
     last=x-1
+    MID=Alignment(horizontal='left',vertical='center',wrap_text=True)
+
+    # --- fond, bordures, hauteurs ---
+    for cy,classes in CYCLES:
+        for cls in classes:
+            for sl in range(H[cls]):
+                r=TOP[cls]+sl
+                for k in range(7):
+                    cc=G.cell(r,2+k); cc.font=font(FS_GRID,True,BLACK); cc.alignment=MID
+                    cc.border=BOX; cc.fill=fill(WEEKEND if k>=5 else WHITE)
+                mx=3
+                for day in DAYS:
+                    for rr in _byday.get((code,cls,day),[]):
+                        if slots(code,cls,day,H[cls])[id(rr)]==sl and role_of(rr)=='seul':
+                            mx=max(mx,_nlines(rr))
+                G.row_dimensions[r].height=mx*18+9
+
+    # --- bandeaux de cycle + noms de classes ---
+    for rb,cy,n in bands:
+        G.merge_cells(start_row=rb,start_column=1,end_row=rb,end_column=8)
+        c=G.cell(rb,1,f"CYCLE {cy.upper()}   ({n} classes)")
+        c.font=font(10,True,WHITE); c.alignment=Alignment(horizontal='left',vertical='center',indent=1)
+        for k in range(1,9): G.cell(rb,k).fill=fill(CYC_BAND[cy]); G.cell(rb,k).border=BOX_M
+        G.row_dimensions[rb].height=21
+    for cy,classes in CYCLES:
+        for cls in classes:
+            for sl in range(H[cls]):
+                cc=G.cell(TOP[cls]+sl,1); cc.fill=fill(CYC_FILL[cy]); cc.border=BOX_M
+            c=G.cell(TOP[cls],1,cls); c.font=font(12,True,BLACK); c.alignment=CTR
+            if H[cls]>1:   # le nom de classe couvre toutes ses sous-lignes
+                G.merge_cells(start_row=TOP[cls],start_column=1,end_row=TOP[cls]+H[cls]-1,end_column=1)
+
+    # --- contenu : une seule écriture par séance, fusion si partagée ---
+    merges=[]
+    seen=set()
+    for cy,classes in CYCLES:
+        for cls in classes:
+            for k,day in enumerate(DAYS):
+                col=2+k
+                sl=slots(code,cls,day,H[cls])
+                for r in _byday.get((code,cls,day),[]):
+                    ro=role_of(r)
+                    if ro in ('milieu','bas'): continue      # écrite par le groupe du haut
+                    key=(r['semaine'],r['seance'],day)
+                    if key in seen: continue
+                    seen.add(key)
+                    r0=TOP[cls]+sl[id(r)]
+                    if ro=='haut':
+                        g=_groups[(r['semaine'],r['seance'])]
+                        r1=TOP[g[-1]]                        # 1re sous-ligne du dernier groupe
+                        # on étend la fusion aux sous-lignes libres ce jour-là, pour que le bloc
+                        # couvre franchement la bande de chaque classe concernée
+                        occ={sl[id(o)] for o in _byday.get((code,cls,day),[]) if o is not r}
+                        while r0-1>=TOP[cls] and (r0-1-TOP[cls]) not in occ: r0-=1
+                        lastc=g[-1]; sll=slots(code,lastc,day,H[lastc])
+                        occl={sll[id(o)] for o in _byday.get((code,lastc,day),[]) if o['seance']!=r['seance']}
+                        while r1+1<=TOP[lastc]+H[lastc]-1 and (r1+1-TOP[lastc]) not in occl: r1+=1
+                        merges.append((r0,r1,col))
+                    else:
+                        r1=r0
+                    v = label(r) if static else f'=IFERROR(VLOOKUP("{r["seance"]}",Planning!$T:$AD,11,0),"")'
+                    cc=G.cell(r0,col,v); cc.font=font(FS_GRID,True,BLACK); cc.alignment=MID
+    for r0,r1,col in merges:
+        if r1>r0: G.merge_cells(start_row=r0,start_column=col,end_row=r1,end_column=col)
+
     rg=f'B5:H{last}'
-    # Une case = une seule séance : la couleur de famille est donc toujours exacte.
-    # Les règles « famille » passent en premier ; le repère quinzaine suit et s'y ajoute
-    # dans Excel (dans LibreOffice, seule la couleur de fond s'applique, le repère ◆ Q-A
-    # restant lisible dans le texte).
     for _nom,_col,_mats in FAMILLES:
         t='+'.join(f'ISNUMBER(SEARCH(CHAR(10)&"{m}"&CHAR(10),B5))' for m in _mats)
-        G.conditional_formatting.add(rg, FormulaRule(formula=[f'({t})>0'], fill=fill(_col)))
-    G.conditional_formatting.add(rg, FormulaRule(formula=['ISNUMBER(SEARCH("◆ PONCTUEL",B5))'], font=font(FS_GRID,True,ALERT_FG)))
-    G.conditional_formatting.add(rg, FormulaRule(formula=['ISNUMBER(SEARCH("◆ Q-",B5))'], font=font(FS_GRID,True,QUINZ_FG)))
+        G.conditional_formatting.add(rg, FormulaRule(formula=[f'({t})>0'], fill=fill(_col), stopIfTrue=True))
     G.conditional_formatting.add(rg, FormulaRule(formula=['LEN(B5)=0'], fill=fill(GREY_L), stopIfTrue=True))
     G.freeze_panes='B5'
     for br in breaks: G.row_breaks.append(Break(id=br))
@@ -765,12 +821,12 @@ LEG=([('__TITRE__','COULEUR DES CASES — famille de matières','','','')]
       ('Secondaire','1ére, 2éme et 3éme (8 groupes)','','',''),
       ('Bac','Bac Eco, Bac SCE, Bac INFO','','','')]
    + [('__TITRE__','REPÈRES DANS LE TEXTE','','','')]
-   + [('◆ Q-A','Ce groupe a la séance en semaines A : 14/09 · 28/09 · 12/10 · 26/10','','',''),
-      ('◆ Q-B','Ce groupe a la séance en semaines B : 21/09 · 05/10 · 19/10','','',''),
-      ('⊕','Séance PARTAGÉE : les groupes réunis sur ce créneau sont listés à la suite','','',''),
-      ('◆ OPTION','Cours au choix : le groupe se scinde sur ce créneau (Espagnol OU Italien)','','',''),
-      ('◆ EN LIGNE','Séance à distance (à renseigner dans la colonne Mode de Planning)','','',''),
-      ('◆ PONCTUEL','Séance exceptionnelle, non récurrente (ex. rattrapage)','','',''),
+   + [('Case fusionnée','SÉANCE PARTAGÉE : elle n’est écrite qu’une fois et sa case couvre toutes les classes réunies sur ce créneau','','',''),
+      ('Q-A','Ce groupe a la séance en semaines A : 14/09 · 28/09 · 12/10 · 26/10','','',''),
+      ('Q-B','Ce groupe a la séance en semaines B : 21/09 · 05/10 · 19/10','','',''),
+      ('OPT','Cours au choix : le groupe se scinde sur ce créneau (Espagnol OU Italien)','','',''),
+      ('PONCT.','Séance exceptionnelle, non récurrente (ex. rattrapage)','','',''),
+      ('EN LIGNE','Séance à distance (à renseigner dans la colonne Mode de Planning)','','',''),
       ('Case grisée','Aucune séance sur ce créneau','','',''),
       ('⚠ en rouge','Conflit horaire, doublon ou anomalie détectée automatiquement','','','')])
 FAM_COL={_n:_c for _n,_c,_m in FAMILLES}
@@ -798,8 +854,8 @@ for k,(cy,_) in enumerate(CYCLES):
 x+=1
 
 x=sband(x,'MODE D’EMPLOI')
-HOW=[('1','Modifier, ajouter ou supprimer une séance','Tout se passe dans la feuille Planning : 1 ligne = 1 séance. Les grilles hebdomadaires et tous les indicateurs se recalculent seuls.'),
-     ('2','Ajouter une séance','Insérer une ligne dans Planning, puis recopier les formules des colonnes H, S, T, U, V, W et X depuis la ligne du dessus (double-clic sur la poignée de recopie).'),
+HOW=[('1','Modifier une séance existante','Dans la feuille Planning : changer l’horaire, la matière, l’enseignant, la salle ou le mode. La grille de la semaine et tous les indicateurs se mettent à jour SEULS (chaque case va chercher sa séance par son ID).'),
+     ('2','Ajouter ou supprimer une séance','Ajouter la ligne dans Planning (recopier les formules des colonnes H et X à AD depuis la ligne du dessus). ATTENTION : la STRUCTURE des grilles (nombre de lignes par classe et cellules fusionnées) est figée à la construction — une séance ajoutée n’apparaîtra pas toute seule dans la grille. Demandez-moi de régénérer le classeur, ou reportez-la à la main.'),
      ('3','Renseigner une salle ou une séance en ligne','Colonnes Salle et Mode de Planning (menus déroulants). L’indication apparaît aussitôt dans la grille de la semaine.'),
      ('4','Vérifier la fiabilité','Ouvrir la feuille Contrôles : la colonne Statut doit afficher « OK » partout.'),
      ('5','Imprimer ou envoyer en PDF','Chaque grille est déjà paramétrée : A4 paysage, 1 page de large, saut de page à chaque changement de cycle, en-têtes répétés. Fichier ▸ Exporter au format PDF.'),
@@ -820,7 +876,7 @@ WARN=[("Salle et Mode (présentiel / en ligne) sont absents du fichier d’origi
       ("Les 301 séances de septembre — soit 370 lignes groupe-séance — sont conservées à l’identique, y compris les fautes de frappe d’origine (colonne « Texte d’origine » de Planning)."),
       ("Les séances partagées entre plusieurs groupes (Physique de Melek, Espagnol, Italien, Français de Nassima…) sont conservées comme telles : un groupe par ligne, reliés par un même ID séance, et « ⊕ » dans la grille."),
       ("17 décisions et points ambigus sont détaillés en bas de la feuille Contrôles. Trois méritent votre arbitrage : les Physique « /par quinzaine » de Melek, le STI du lundi en 3éme INFO, et le jeudi 15/10 (jour férié)."),
-      ("Les grilles hebdomadaires sont calculées par formules : à la première ouverture, laisser Excel recalculer (ou appuyer sur F9).")]
+      ("Les grilles hebdomadaires sont calculées par formules : à la première ouverture, laisser Excel recalculer (ou appuyer sur F9). Leur structure (lignes et fusions) est en revanche figée : voir le point 2 du mode d’emploi.")]
 for w_ in WARN:
     So.merge_cells(start_row=x,start_column=2,end_row=x,end_column=5)
     c=So.cell(x,2,'•   '+w_); c.font=font(9); c.alignment=LTOP; c.border=BOX; c.fill=fill('FEF5E7')

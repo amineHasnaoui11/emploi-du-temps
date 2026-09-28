@@ -44,7 +44,8 @@ Elles sont conservées et rendues explicites :
 
 - dans `Planning`, **un groupe par ligne**, les lignes d'une même séance étant reliées par un **ID séance** commun ;
 - une seule ligne porte `Ligne principale = Oui`, pour ne compter l'heure d'enseignement qu'une fois ;
-- dans les grilles, la case affiche **`⊕`** suivi de la liste des groupes réunis.
+- dans les grilles, la séance n'est **écrite qu'une seule fois**, dans une **cellule fusionnée**
+  qui couvre les lignes de tous les groupes concernés — comme dans le fichier d'origine.
 
 Deux rythmes coexistent :
 
@@ -128,8 +129,19 @@ Le fond de chaque case indique la **famille de matières** :
 La colonne *Classe* garde la couleur du **cycle**. Les repères `◆ Q-A` / `◆ Q-B`
 marquent les séances par quinzaine, `◆ PONCTUEL` les séances non récurrentes.
 
-Le code couleur est posé par **mise en forme conditionnelle** : si vous changez la
-matière d'une séance dans `Planning`, la couleur suit toute seule.
+Le texte des cases est en **gras noir**, 12 pt. Le code couleur est posé par
+**mise en forme conditionnelle** : si vous changez la matière d'une séance dans
+`Planning`, la couleur suit toute seule.
+
+## Ce qui est vivant, ce qui est figé
+
+Chaque case de grille va chercher sa séance dans `Planning` **par son ID séance**.
+
+- **Vivant** : horaire, matière, enseignant, salle, mode, notes. Modifiez-les dans
+  `Planning`, la grille et tous les indicateurs suivent.
+- **Figé** : la *structure* des grilles — nombre de lignes par classe et cellules
+  fusionnées. Une séance **ajoutée** dans `Planning` n'apparaîtra pas d'elle-même
+  dans la grille ; il faut régénérer le classeur (`python3 outils/build.py`).
 
 ## Le fichier « Octobre seul »
 
