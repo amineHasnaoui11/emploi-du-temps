@@ -1,0 +1,108 @@
+{
+ "Math": [
+  "95B5EC",
+  [
+   "Math",
+   "رياضيات"
+  ]
+ ],
+ "Physique": [
+  "ECDC95",
+  [
+   "Physique",
+   "فيزياء"
+  ]
+ ],
+ "Français": [
+  "CBF3E2",
+  [
+   "Français"
+  ]
+ ],
+ "Arabe": [
+  "ECF3CB",
+  [
+   "Arabe",
+   "عربية"
+  ]
+ ],
+ "Anglais": [
+  "AAF6BB",
+  [
+   "Anglais"
+  ]
+ ],
+ "SVT": [
+  "95ECE6",
+  [
+   "SVT"
+  ]
+ ],
+ "Éveil scientifique": [
+  "CFF6AA",
+  [
+   "Éveil scientifique",
+   "إيقاظ علمي"
+  ]
+ ],
+ "Histoire": [
+  "F6AAD8",
+  [
+   "Histoire"
+  ]
+ ],
+ "Géographie": [
+  "D195EC",
+  [
+   "Géographie"
+  ]
+ ],
+ "Philo": [
+  "CBCCF3",
+  [
+   "Philo"
+  ]
+ ],
+ "Eco": [
+  "F6CDAA",
+  [
+   "Eco"
+  ]
+ ],
+ "Gestion": [
+  "AAE0F6",
+  [
+   "Gestion"
+  ]
+ ],
+ "Informatique": [
+  "C4AAF6",
+  [
+   "Informatique"
+  ]
+ ],
+ "ALGO": [
+  "F6AABD",
+  [
+   "ALGO"
+  ]
+ ],
+ "STI": [
+  "F3CBF1",
+  [
+   "STI"
+  ]
+ ],
+ "Espagnol": [
+  "A0EC95",
+  [
+   "Espagnol"
+  ]
+ ],
+ "Italien": [
+  "F3CFCB",
+  [
+   "Italien"
+  ]
+ ]
+}

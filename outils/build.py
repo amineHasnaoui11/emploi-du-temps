@@ -30,16 +30,29 @@ ALERT_BG = 'FDEDEC'; ALERT_FG='B03A2E'
 OK_FG    = '1E7B4D'
 QUINZ_FG = '8A5A00'
 
-# --- Familles de matières : 8 couleurs pastel, texte foncé lisible sur chacune ---
-FAMILLES=[('Arabe',              'FBE3DC', ['Arabe','عربية']),
-          ('Français',           'DCE8F7', ['Français']),
-          ('Langues étrangères', 'DFF0E4', ['Anglais','Espagnol','Italien']),
-          ('Mathématiques',      'FDF0D5', ['Math','رياضيات']),
-          ('Sciences',           'E2E6F5', ['Physique','فيزياء','SVT','Éveil scientifique','إيقاظ علمي']),
-          ('Sciences humaines',  'F3E1EE', ['Histoire','Géographie','Philo']),
-          ('Économie / Gestion', 'FAE6CF', ['Eco','Gestion']),
-          ('Informatique',       'DCEFF2', ['Informatique','ALGO','STI'])]
-FAM_OF={m:(n,c) for n,c,lst in FAMILLES for m in lst}
+# --- Une couleur par MATIÈRE. Teintes réparties sur la roue chromatique et
+#     vérifiées : écart Lab minimum 13.9 (nettement distinguables), contraste
+#     minimum 9.2:1 avec le texte gras noir. Math = bleu, Physique = jaune.
+MATIERES=[
+          ('Math', '95B5EC', ['Math', 'رياضيات']),
+          ('Physique', 'ECDC95', ['Physique', 'فيزياء']),
+          ('Français', 'CBF3E2', ['Français']),
+          ('Arabe', 'ECF3CB', ['Arabe', 'عربية']),
+          ('Anglais', 'AAF6BB', ['Anglais']),
+          ('SVT', '95ECE6', ['SVT']),
+          ('Éveil scientifique', 'CFF6AA', ['Éveil scientifique', 'إيقاظ علمي']),
+          ('Histoire', 'F6AAD8', ['Histoire']),
+          ('Géographie', 'D195EC', ['Géographie']),
+          ('Philo', 'CBCCF3', ['Philo']),
+          ('Eco', 'F6CDAA', ['Eco']),
+          ('Gestion', 'AAE0F6', ['Gestion']),
+          ('Informatique', 'C4AAF6', ['Informatique']),
+          ('ALGO', 'F6AABD', ['ALGO']),
+          ('STI', 'F3CBF1', ['STI']),
+          ('Espagnol', 'A0EC95', ['Espagnol']),
+          ('Italien', 'F3CFCB', ['Italien']),
+]
+MAT_COLOR={lab:c for _n,c,labs in MATIERES for lab in labs}
 
 F='Arial'
 def font(sz=10,b=False,c='1B2A41',i=False): return Font(name=F,size=sz,bold=b,color=c,italic=i)
@@ -167,7 +180,7 @@ P.auto_filter.ref=f'A3:{CL(len(HDR))}{R1}'
 rng=f'A{R0}:V{R1}'
 for cy,f_ in CYC_FILL.items():
     P.conditional_formatting.add(rng, FormulaRule(formula=[f'$I{R0}="{cy}"'], fill=fill(f_), stopIfTrue=False))
-for _nom,_col,_mats in FAMILLES:   # repère couleur de la famille de matières
+for _nom,_col,_mats in MATIERES:   # couleur propre à chaque matière
     _test='+'.join(f'($K{R0}="{m}")' for m in _mats)
     P.conditional_formatting.add(f'K{R0}:L{R1}', FormulaRule(formula=[f'({_test})>0'], fill=fill(_col), stopIfTrue=True))
 P.conditional_formatting.add(f'P{R0}:P{R1}', FormulaRule(formula=[f'LEFT($P{R0},9)="Quinzaine"'], font=font(9,True,QUINZ_FG)))
@@ -196,8 +209,8 @@ title_block(Rf,'T','RÉFÉRENTIELS — listes de référence du classeur',
   "La colonne Salle est volontairement vide : cette information est absente du fichier d'origine.")
 blocks=[('CLASSES / GROUPES',1,['Ordre','Classe / Groupe','Cycle','Séances sem. A','Séances sem. B'],
          [[i+1,c,CYC[c],None,None] for i,c in enumerate(CLASS_ORDER)],[7,18,12,13,13]),
-        ('MATIÈRES',7,['Matière (libellé affiché)','Normalisée','Séances (total)'],
-         [[m_,{'عربية':'Arabe','رياضيات':'Math','إيقاظ علمي':'Éveil scientifique','فيزياء':'Physique'}.get(m_,m_),None] for m_ in matieres],[22,19,14]),
+        ('MATIÈRES',7,['Matière (libellé affiché)','Normalisée','Séances (total)','Couleur'],
+         [[m_,{'عربية':'Arabe','رياضيات':'Math','إيقاظ علمي':'Éveil scientifique','فيزياء':'Physique'}.get(m_,m_),None,None] for m_ in matieres],[22,19,14,11]),
         ('ENSEIGNANTS',11,['Enseignant','Séances / sem. A','Heures / sem. A'],
          [[p,None,None] for p in profs],[18,15,15]),
         ('SALLES',15,['Salle (à compléter)'],[[None] for _ in range(12)],[18]),
@@ -222,6 +235,9 @@ for i,c_ in enumerate(CLASS_ORDER):
     Rf.cell(x,5,f'=COUNTIFS(Planning!$C${R0}:$C${R1},"B",Planning!$A${R0}:$A${R1},"S4",Planning!$J${R0}:$J${R1},$B{x})')
 for i,m_ in enumerate(matieres):
     Rf.cell(5+i,9,f'=COUNTIF(Planning!$K${R0}:$K${R1},$G{5+i})')
+    cc=Rf.cell(5+i,10,'')                       # pastille de la couleur de la matière
+    if m_ in MAT_COLOR: cc.fill=fill(MAT_COLOR[m_])
+    cc.border=BOX
 for i,p in enumerate(profs):
     x=5+i
     Rf.cell(x,12,f'=COUNTIFS(Planning!$A${R0}:$A${R1},"S5",Planning!$M${R0}:$M${R1},$K{x})')
@@ -340,7 +356,7 @@ def build_grid(wbk, week, static):
     for k in range(2,9): G.column_dimensions[CL(k)].width=23
     ref=' — SEMAINE DE RÉFÉRENCE' if code=='S3' else ''
     title_block(G,'H', f"{code} · {per.upper()}   |   SEMAINE {par}{ref}",
-      "Une case = une séance : horaire / matière / enseignant.   Couleur = famille de matières.   "
+      "Une case = une séance : horaire / matière / enseignant.   Chaque matière a sa couleur.   "
       "Une case fusionnée sur plusieurs classes = séance commune à ces groupes.   "
       "Q-A ou Q-B = une semaine sur deux.   OPT = cours au choix.", h2=26)
     c=G.cell(3,1,'Classe / Groupe'); c.font=font(11,True,WHITE); c.fill=fill(INK2); c.alignment=CTR; c.border=BOX_M
@@ -424,7 +440,7 @@ def build_grid(wbk, week, static):
         if r1>r0: G.merge_cells(start_row=r0,start_column=col,end_row=r1,end_column=col)
 
     rg=f'B5:H{last}'
-    for _nom,_col,_mats in FAMILLES:
+    for _nom,_col,_mats in MATIERES:
         t='+'.join(f'ISNUMBER(SEARCH(CHAR(10)&"{m}"&CHAR(10),B5))' for m in _mats)
         G.conditional_formatting.add(rg, FormulaRule(formula=[f'({t})>0'], fill=fill(_col), stopIfTrue=True))
     G.conditional_formatting.add(rg, FormulaRule(formula=['LEN(B5)=0'], fill=fill(GREY_L), stopIfTrue=True))
@@ -588,7 +604,7 @@ NOTES=[
  ("SÉANCES PARTAGÉES ENTRE PLUSIEURS GROUPES — 16 en semaine A, 14 en semaine B",
   "Dans le fichier d’origine, une séance réunissant plusieurs groupes est écrite une seule fois, dans une cellule fusionnée qui déborde sur les blocs de toutes les classes concernées.",
   "Structure","CONSERVÉES et rendues explicites",
-  "Chaque groupe a désormais sa propre ligne dans Planning, les lignes d’une même séance étant reliées par un ID séance commun. La grille affiche « ⊕ » suivi des groupes réunis. La charge enseignant ne compte la séance qu’une fois."),
+  "Chaque groupe a désormais sa propre ligne dans Planning, les lignes d’une même séance étant reliées par un ID séance commun. Dans la grille, la séance n'est écrite qu'une fois, dans une cellule fusionnée qui couvre les lignes de tous les groupes réunis. La charge enseignant ne compte la séance qu’une fois."),
  ("Physique (Melek) — 7éme (A)+(B) mercredi, 8éme (A)+(B)+(C) vendredi, 9éme (A)+(B)+(C) lundi",
   "Séances partagées sur tout un niveau, présentes les 3 semaines, mais portant la mention « /par quinzaine ».",
   "Étiquette contradictoire","Traitées comme HEBDOMADAIRES et PARTAGÉES",
@@ -813,8 +829,8 @@ for name,desc,cnt,typ in NAV:
 x+=1
 
 x=sband(x,'LÉGENDE')
-LEG=([('__TITRE__','COULEUR DES CASES — famille de matières','','','')]
-   + [(_n,'Matières : '+', '.join(_m),'','','') for _n,_c,_m in FAMILLES]
+LEG=([('__TITRE__','COULEUR DES CASES — une couleur par matière','','','')]
+   + [(_n,('Écrit dans la case : '+' ou '.join(_m)) if len(_m)>1 else '','','','') for _n,_c,_m in MATIERES]
    + [('__TITRE__','COULEUR DE LA COLONNE CLASSE — cycle','','','')]
    + [('Primaire','4éme, 5éme, 6éme Pilote (A), 6éme (B)','','',''),
       ('Collège','7éme, 8éme et 9éme (8 groupes)','','',''),
@@ -829,7 +845,7 @@ LEG=([('__TITRE__','COULEUR DES CASES — famille de matières','','','')]
       ('EN LIGNE','Séance à distance (à renseigner dans la colonne Mode de Planning)','','',''),
       ('Case grisée','Aucune séance sur ce créneau','','',''),
       ('⚠ en rouge','Conflit horaire, doublon ou anomalie détectée automatiquement','','','')])
-FAM_COL={_n:_c for _n,_c,_m in FAMILLES}
+FAM_COL={_n:_c for _n,_c,_m in MATIERES}
 for i,row_ in enumerate(LEG):
     lab=row_[0]
     if lab=='__TITRE__':                      # sous-titre de bloc dans la légende
@@ -874,9 +890,9 @@ x=sband(x,'À LIRE AVANT UTILISATION')
 WARN=[("Salle et Mode (présentiel / en ligne) sont absents du fichier d’origine : les colonnes existent mais sont vides. Aucune valeur n’a été inventée."),
       ("Le planning d’octobre a été construit à partir de la semaine du 28/09 au 04/10, désignée comme référence. Les séances par quinzaine ont été identifiées en comparant les 3 semaines de septembre."),
       ("Les 301 séances de septembre — soit 370 lignes groupe-séance — sont conservées à l’identique, y compris les fautes de frappe d’origine (colonne « Texte d’origine » de Planning)."),
-      ("Les séances partagées entre plusieurs groupes (Physique de Melek, Espagnol, Italien, Français de Nassima…) sont conservées comme telles : un groupe par ligne, reliés par un même ID séance, et « ⊕ » dans la grille."),
+      ("Les séances partagées entre plusieurs groupes (Physique de Melek, Espagnol, Italien, Français de Nassima…) sont conservées comme telles : un groupe par ligne dans Planning, reliés par un même ID séance, et une seule cellule fusionnée dans la grille."),
       ("17 décisions et points ambigus sont détaillés en bas de la feuille Contrôles. Trois méritent votre arbitrage : les Physique « /par quinzaine » de Melek, le STI du lundi en 3éme INFO, et le jeudi 15/10 (jour férié)."),
-      ("Les grilles hebdomadaires sont calculées par formules : à la première ouverture, laisser Excel recalculer (ou appuyer sur F9). Leur structure (lignes et fusions) est en revanche figée : voir le point 2 du mode d’emploi.")]
+      ("Chaque matière a sa propre couleur (17 teintes, liste en légende). Les grilles sont calculées par formules : à la première ouverture, laisser Excel recalculer (ou appuyer sur F9). Leur structure (lignes et fusions) est en revanche figée : voir le point 2 du mode d’emploi.")]
 for w_ in WARN:
     So.merge_cells(start_row=x,start_column=2,end_row=x,end_column=5)
     c=So.cell(x,2,'•   '+w_); c.font=font(9); c.alignment=LTOP; c.border=BOX; c.fill=fill('FEF5E7')

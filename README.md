@@ -113,21 +113,41 @@ La grille se remplit alors toute seule.
 
 ## Code couleur des grilles
 
-Le fond de chaque case indique la **famille de matières** :
+**Une couleur par matière**, tous niveaux confondus :
 
-| Famille | Matières |
-|---|---|
-| Arabe | Arabe, عربية |
-| Français | Français |
-| Langues étrangères | Anglais, Espagnol, Italien |
-| Mathématiques | Math, رياضيات |
-| Sciences | Physique, فيزياء, SVT, Éveil scientifique, إيقاظ علمي |
-| Sciences humaines | Histoire, Géographie, Philo |
-| Économie / Gestion | Eco, Gestion |
-| Informatique | Informatique, ALGO, STI |
+| Matière | Couleur | Libellé(s) dans la case |
+|---|---|---|
+| Math | `#95B5EC` | Math ou رياضيات |
+| Physique | `#ECDC95` | Physique ou فيزياء |
+| Français | `#CBF3E2` | Français |
+| Arabe | `#ECF3CB` | Arabe ou عربية |
+| Anglais | `#AAF6BB` | Anglais |
+| SVT | `#95ECE6` | SVT |
+| Éveil scientifique | `#CFF6AA` | Éveil scientifique ou إيقاظ علمي |
+| Histoire | `#F6AAD8` | Histoire |
+| Géographie | `#D195EC` | Géographie |
+| Philo | `#CBCCF3` | Philo |
+| Eco | `#F6CDAA` | Eco |
+| Gestion | `#AAE0F6` | Gestion |
+| Informatique | `#C4AAF6` | Informatique |
+| ALGO | `#F6AABD` | ALGO |
+| STI | `#F3CBF1` | STI |
+| Espagnol | `#A0EC95` | Espagnol |
+| Italien | `#F3CFCB` | Italien |
 
-La colonne *Classe* garde la couleur du **cycle**. Les repères `◆ Q-A` / `◆ Q-B`
-marquent les séances par quinzaine, `◆ PONCTUEL` les séances non récurrentes.
+La palette est générée et vérifiée par `outils/palette.py` :
+
+- teintes réparties sur la roue chromatique, avec trois niveaux de clarté ;
+- **écart Lab (ΔE CIE76) minimum : 13,9** — au-delà de 10, deux teintes sont nettement
+  distinguables, y compris à l'impression ;
+- **contraste minimum avec le texte gras noir : 9,2 : 1** (le seuil confortable est 7 : 1) ;
+- Math en bleu et Physique en jaune sont imposés, le reste est optimisé autour.
+
+Une séance partagée étant une cellule fusionnée unique, tous les groupes réunis partagent
+automatiquement la même couleur.
+
+La colonne *Classe* garde la couleur du **cycle**. Les repères `Q-A` / `Q-B` marquent les
+semaines où le groupe a la séance, `OPT` les cours au choix, `PONCT.` les séances non récurrentes.
 
 Le texte des cases est en **gras noir**, 12 pt. Le code couleur est posé par
 **mise en forme conditionnelle** : si vous changez la matière d'une séance dans
