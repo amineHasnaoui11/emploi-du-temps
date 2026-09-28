@@ -33,6 +33,36 @@ Les scripts sont reproductibles : `pip install openpyxl` puis
 6. **Contrôles** — 21 contrôles automatiques + les 14 décisions de construction d'octobre.
 7. **Récapitulatif** — indicateurs par semaine, cycle, matière et jour.
 
+## Séances partagées entre plusieurs groupes
+
+Dans le fichier d'origine, une séance réunissant plusieurs groupes est écrite **une seule fois**,
+dans une cellule fusionnée qui déborde sur les blocs de toutes les classes concernées.
+Il y en a **16 par semaine A et 14 par semaine B** (Physique de Melek sur tout un niveau,
+Espagnol, Italien, Philo, Français de Nassima en 9éme (B)+(C), etc.).
+
+Elles sont conservées et rendues explicites :
+
+- dans `Planning`, **un groupe par ligne**, les lignes d'une même séance étant reliées par un **ID séance** commun ;
+- une seule ligne porte `Ligne principale = Oui`, pour ne compter l'heure d'enseignement qu'une fois ;
+- dans les grilles, la case affiche **`⊕`** suivi de la liste des groupes réunis.
+
+Deux rythmes coexistent :
+
+| Rythme | Signification |
+|---|---|
+| `Hebdomadaire` | même séance, mêmes groupes, toutes les semaines |
+| `Hebdo · groupes alternés` | la séance a lieu chaque semaine, mais **les groupes alternent** (13 cas) |
+| `Quinzaine A` / `Quinzaine B` | la séance elle-même n'a lieu qu'une semaine sur deux |
+
+Vu d'un groupe, les deux derniers reviennent une semaine sur deux : d'où le repère `◆ Q-A` / `◆ Q-B`.
+
+## Cours en option
+
+Espagnol (Imen) et Italien (Amel) se chevauchent le mardi 19:15–20:45 pour un même groupe
+(Bac SCE en semaine A, 3éme INFO en semaine B). Lecture retenue : **le groupe se scinde**,
+chaque élève suivant l'une OU l'autre langue. Ces séances portent `Cours en option = Oui`
+et sont exclues de la détection de conflit. Si ce n'est pas une option, videz cette colonne.
+
 ## Règle des semaines A / B
 
 Les séances par quinzaine alternent sur deux semaines. La parité a été déduite
@@ -48,12 +78,13 @@ semaine B = 81 séances fixes + 18 quinzaine B = **99**.
 
 ## Garanties vérifiées
 
-- 301 / 301 séances d'origine présentes, **0 altérée** (le texte brut de chaque cellule
+- 301 / 301 séances d'origine présentes (370 lignes groupe-séance), **0 altérée, groupes compris** (le texte brut de chaque cellule
   d'origine est conservé en colonne Y de `Planning`, avec sa référence en colonne Z).
-- 0 conflit d'enseignant, 0 conflit de classe, 0 doublon, sur les 7 semaines.
+- 0 conflit d'enseignant, 0 conflit de groupe, 0 doublon, 0 partage incohérent, sur les 7 semaines.
 - 0 erreur de formule dans l'ensemble du classeur (recalcul complet vérifié).
 - Dates et jours conformes au calendrier réel d'octobre 2026.
-- Impression : A4, 1 page de large, **un cycle par page**, en-têtes répétés, 44 pages au total.
+- Impression : A4 paysage, 1 page de large, saut de page à chaque cycle, en-têtes répétés.
+  57 pages pour le fichier complet, 24 pour celui d'octobre.
 
 ## Points nécessitant un arbitrage
 

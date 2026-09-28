@@ -8,8 +8,8 @@ from openpyxl.formatting.rule import FormulaRule
 from openpyxl.worksheet.properties import PageSetupProperties
 from openpyxl.comments import Comment
 
-D=json.load(open('rows.json',encoding='utf-8'))
-M=json.load(open('model.json',encoding='utf-8'))
+D=json.load(open('rows2.json',encoding='utf-8'))
+M=json.load(open('model2.json',encoding='utf-8'))
 rows=D['rows']; WEEKS=D['weeks']; CYCLES=D['cycles']; CLASS_ORDER=D['class_order']
 DAYS=['Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi','Dimanche']
 CYC={c:cy for cy,lst in CYCLES for c in lst}
@@ -90,20 +90,24 @@ def title_block(ws, last_col, t1, t2, h1=34, h2=20):
 # ==========================================================
 P = wb.create_sheet('Planning')
 HDR = ['Semaine','Période','Parité','Date','Jour','Début','Fin','Durée (h)','Cycle','Classe / Groupe',
-       'Matière','Matière (normalisée)','Enseignant','Salle','Mode','Rythme','Origine','Notes',
-       '⚠ Conflit enseignant','⚠ Conflit classe','⚠ Doublon','Rang','Clé','Libellé grille',
-       'Texte d\'origine','Réf. cellule source']
-WID = [9,30,7,11,11,7.5,7.5,9,12,18,20,19,17,10,12,15,19,30,19,17,12,7,34,44,52,26]
+       'Matière','Matière (normalisée)','Enseignant','Salle','Mode','Rythme',
+       'Séance partagée avec','Nb groupes','Ligne principale','ID séance','Origine','Notes',
+       'Cours en option','⚠ Conflit enseignant','⚠ Conflit classe','⚠ Doublon','⚠ Partage incohérent',
+       'Rang','Clé','Libellé grille','Texte d\'origine','Réf. cellule source']
+WID = [9,30,7,11,11,7.5,7.5,9,12,18,20,19,17,10,12,24,34,9,12,11,19,30,14,19,17,12,17,7,34,46,52,26]
 NB = len(rows); R0 = 4; R1 = R0+NB-1
 title_block(P, CL(len(HDR)),
   'PLANNING DES SÉANCES — Année scolaire 2026-2027',
-  "TABLE DE RÉFÉRENCE : toute modification se fait ici. Les grilles hebdomadaires et tous les indicateurs se recalculent automatiquement. "
-  "Colonnes S à Z = zone technique (contrôles + formules), ne pas saisir.")
+  "TABLE DE RÉFÉRENCE : toute modification se fait ici. 1 ligne = 1 groupe dans une séance. "
+  "Une séance partagée entre plusieurs groupes occupe autant de lignes que de groupes, reliées par le même ID séance "
+  "(seule la 1re porte « Ligne principale = Oui », pour ne compter l'heure d'enseignement qu'une fois). "
+  "Colonnes X à AF = zone technique, ne pas saisir.")
 for j,(h,w) in enumerate(zip(HDR,WID),1):
-    c=P.cell(3,j,h); c.font=font(9,True,WHITE); c.fill=fill(INK2 if j<19 else (ACC if j<22 else '6B7A8C'))
+    c=P.cell(3,j,h); c.font=font(9,True,WHITE)
+    c.fill=fill(INK2 if j<17 else (ACC if j<21 else (INK2 if j<24 else ('B03A2E' if j<28 else '6B7A8C'))))
     c.alignment=CTR; c.border=BOX_M
     P.column_dimensions[CL(j)].width=w
-P.row_dimensions[3].height=32
+P.row_dimensions[3].height=34
 
 for i,r in enumerate(rows):
     x=R0+i
@@ -113,7 +117,7 @@ for i,r in enumerate(rows):
     c=P.cell(x,4,datetime.date.fromisoformat(r['date'])); c.number_format='ddd dd/mm/yyyy'; c.alignment=CTR
     P.cell(x,5,r['jour']).alignment=CTR
     for col,val in ((6,r['debut']),(7,r['fin'])):
-        h,mi=val.split(':'); c=P.cell(x,col,datetime.time(int(h),int(mi))); c.number_format='hh:mm'; c.alignment=CTR
+        hh,mi=val.split(':'); c=P.cell(x,col,datetime.time(int(hh),int(mi))); c.number_format='hh:mm'; c.alignment=CTR
     c=P.cell(x,8,f'=IF(OR($F{x}="",$G{x}=""),"",($G{x}-$F{x})*24)'); c.number_format='0.00'; c.alignment=CTR
     P.cell(x,9,r['cycle']).alignment=CTR
     P.cell(x,10,r['classe']).alignment=LFT
@@ -123,41 +127,59 @@ for i,r in enumerate(rows):
     P.cell(x,14,None).alignment=CTR          # Salle : absente de la source
     P.cell(x,15,None).alignment=CTR          # Mode  : absent de la source
     P.cell(x,16,r['rythme']).alignment=CTR
-    P.cell(x,17,r['origine']).alignment=LFT
-    P.cell(x,18,r['notes']).alignment=LFT
+    P.cell(x,17,r['groupes'] if r['nbgr']>1 else '').alignment=LFT
+    P.cell(x,18,r['nbgr']).alignment=CTR
+    P.cell(x,19,r['principale']).alignment=CTR
+    P.cell(x,20,r['seance']).alignment=CTR
+    P.cell(x,21,r['origine']).alignment=LFT
+    P.cell(x,22,r['notes']).alignment=LFT
+    P.cell(x,23,r.get('option','')).alignment=CTR
     # --- contrôles vivants ---
-    P.cell(x,19,f'=IF($M{x}="","",IF(SUMPRODUCT(($D${R0}:$D${R1}=$D{x})*($M${R0}:$M${R1}=$M{x})*($F${R0}:$F${R1}<$G{x})*($G${R0}:$G${R1}>$F{x}))>1,"⚠ CONFLIT",""))').alignment=CTR
-    P.cell(x,20,f'=IF($J{x}="","",IF(SUMPRODUCT(($D${R0}:$D${R1}=$D{x})*($J${R0}:$J${R1}=$J{x})*($F${R0}:$F${R1}<$G{x})*($G${R0}:$G${R1}>$F{x}))>1,"⚠ CONFLIT",""))').alignment=CTR
-    P.cell(x,21,f'=IF(COUNTIFS($D${R0}:$D${R1},$D{x},$J${R0}:$J${R1},$J{x},$F${R0}:$F${R1},$F{x},$K${R0}:$K${R1},$K{x})>1,"⚠ DOUBLON","")').alignment=CTR
-    P.cell(x,22,f'=COUNTIFS($A${R0}:$A{x},$A{x},$J${R0}:$J{x},$J{x},$E${R0}:$E{x},$E{x})').alignment=CTR
-    P.cell(x,23,f'=$A{x}&"|"&$J{x}&"|"&$E{x}&"|"&$V{x}').alignment=LFT
-    # 1 ligne = horaire (+ repère quinzaine) / 2 = matière / 3 = enseignant / puis salle, mode, note
-    P.cell(x,24,(f'=TEXT($F{x},"hh:mm")&" - "&TEXT($G{x},"hh:mm")'
-                 f'&IF($P{x}="Quinzaine A","   ◆ Q-A",IF($P{x}="Quinzaine B","   ◆ Q-B",IF($P{x}="Exception","   ◆ PONCTUEL","")))'
+    # Une séance partagée occupe plusieurs lignes au même horaire : on ne compte comme
+    # conflit que les chevauchements portant un ID SÉANCE DIFFÉRENT. Et deux cours en
+    # option sur le même créneau (LV3 Espagnol / Italien) ne sont pas un conflit.
+    P.cell(x,24,f'=IF($M{x}="","",IF(SUMPRODUCT(($D${R0}:$D${R1}=$D{x})*($M${R0}:$M${R1}=$M{x})*($T${R0}:$T${R1}<>$T{x})*($F${R0}:$F${R1}<$G{x})*($G${R0}:$G${R1}>$F{x}))>0,"⚠ CONFLIT",""))').alignment=CTR
+    P.cell(x,25,(f'=IF($J{x}="","",IF(SUMPRODUCT(($D${R0}:$D${R1}=$D{x})*($J${R0}:$J${R1}=$J{x})*($T${R0}:$T${R1}<>$T{x})'
+                 f'*($F${R0}:$F${R1}<$G{x})*($G${R0}:$G${R1}>$F{x})*(1-($W${R0}:$W${R1}="Oui")*($W{x}="Oui")))>0,"⚠ CONFLIT",""))')).alignment=CTR
+    P.cell(x,26,f'=IF(COUNTIFS($D${R0}:$D${R1},$D{x},$J${R0}:$J${R1},$J{x},$F${R0}:$F${R1},$F{x},$K${R0}:$K${R1},$K{x})>1,"⚠ DOUBLON","")').alignment=CTR
+    # toutes les lignes d'un même ID doivent partager date, horaires, matière et enseignant
+    P.cell(x,27,(f'=IF(COUNTIF($T${R0}:$T${R1},$T{x})<>COUNTIFS($T${R0}:$T${R1},$T{x},$D${R0}:$D${R1},$D{x},'
+                 f'$F${R0}:$F${R1},$F{x},$G${R0}:$G${R1},$G{x},$K${R0}:$K${R1},$K{x},$M${R0}:$M${R1},$M{x}),"⚠ INCOHÉRENT","")')).alignment=CTR
+    P.cell(x,28,f'=COUNTIFS($A${R0}:$A{x},$A{x},$J${R0}:$J{x},$J{x},$E${R0}:$E{x},$E{x})').alignment=CTR
+    P.cell(x,29,f'=$A{x}&"|"&$J{x}&"|"&$E{x}&"|"&$AB{x}').alignment=LFT
+    P.cell(x,30,(f'=TEXT($F{x},"hh:mm")&" - "&TEXT($G{x},"hh:mm")'
+                 f'&IF(OR($P{x}="Quinzaine A",AND($P{x}="Hebdo · groupes alternés",$C{x}="A")),"   ◆ Q-A",'
+                 f'IF(OR($P{x}="Quinzaine B",AND($P{x}="Hebdo · groupes alternés",$C{x}="B")),"   ◆ Q-B",'
+                 f'IF($P{x}="Exception","   ◆ PONCTUEL","")))'
+                 f'&IF($W{x}="Oui","   ◆ OPTION","")'
                  f'&CHAR(10)&$K{x}&CHAR(10)&$M{x}'
+                 f'&IF($R{x}>1,CHAR(10)&"⊕ "&$Q{x},"")'
                  f'&IF($N{x}<>"",CHAR(10)&"Salle "&$N{x},"")&IF($O{x}="En ligne",CHAR(10)&"◆ EN LIGNE","")'
-                 f'&IF($R{x}<>"",CHAR(10)&$R{x},"")')).alignment=LTOP
-    P.cell(x,25,r['brut']).alignment=LFT
-    P.cell(x,26,r['src']).alignment=LFT
+                 f'&IF($V{x}<>"",CHAR(10)&$V{x},"")')).alignment=LTOP
+    P.cell(x,31,r['brut']).alignment=LFT
+    P.cell(x,32,r['src']).alignment=LFT
     for j in range(1,len(HDR)+1):
         cc=P.cell(x,j); cc.font=font(9); cc.border=BOX
-        if j>=19: cc.font=font(8,c='6B7A8C')
+        if j>=24: cc.font=font(8,c='6B7A8C')
     P.row_dimensions[x].height=15
 
 P.freeze_panes='F4'
 P.auto_filter.ref=f'A3:{CL(len(HDR))}{R1}'
-rng=f'A{R0}:R{R1}'
+rng=f'A{R0}:V{R1}'
 for cy,f_ in CYC_FILL.items():
     P.conditional_formatting.add(rng, FormulaRule(formula=[f'$I{R0}="{cy}"'], fill=fill(f_), stopIfTrue=False))
 for _nom,_col,_mats in FAMILLES:   # repère couleur de la famille de matières
     _test='+'.join(f'($K{R0}="{m}")' for m in _mats)
     P.conditional_formatting.add(f'K{R0}:L{R1}', FormulaRule(formula=[f'({_test})>0'], fill=fill(_col), stopIfTrue=True))
 P.conditional_formatting.add(f'P{R0}:P{R1}', FormulaRule(formula=[f'LEFT($P{R0},9)="Quinzaine"'], font=font(9,True,QUINZ_FG)))
+P.conditional_formatting.add(f'P{R0}:P{R1}', FormulaRule(formula=[f'$P{R0}="Hebdo · groupes alternés"'], font=font(9,True,ACC)))
 P.conditional_formatting.add(f'P{R0}:P{R1}', FormulaRule(formula=[f'$P{R0}="Exception"'], font=font(9,True,ALERT_FG)))
-P.conditional_formatting.add(f'Q{R0}:Q{R1}', FormulaRule(formula=[f'$Q{R0}="Généré (octobre)"'], font=font(9,False,ACC)))
-for col in ('S','T','U'):
+P.conditional_formatting.add(f'W{R0}:W{R1}', FormulaRule(formula=[f'$W{R0}="Oui"'], fill=fill('FEF5E7'), font=font(9,True,QUINZ_FG)))
+P.conditional_formatting.add(f'Q{R0}:R{R1}', FormulaRule(formula=[f'$R{R0}>1'], fill=fill('E4EFF2'), font=font(9,True,'1F5C86')))
+P.conditional_formatting.add(f'U{R0}:U{R1}', FormulaRule(formula=[f'$U{R0}="Généré (octobre)"'], font=font(9,False,ACC)))
+for col in ('X','Y','Z','AA'):
     P.conditional_formatting.add(f'{col}{R0}:{col}{R1}', FormulaRule(formula=[f'LEN(TRIM(${col}{R0}))>0'], fill=fill(ALERT_BG), font=font(8,True,ALERT_FG)))
-setup_print(P, titles='1:3', area=f'A1:R{R1}',
+setup_print(P, titles='1:3', area=f'A1:W{R1}',
             header='Planning des séances — RS 2026-2027', footer='RS 2026-2027 · Planning (table de référence)')
 P.sheet_properties.tabColor=INK
 
@@ -257,22 +279,34 @@ def nsub(code,cls):
     """Nombre de sous-lignes nécessaires : le maximum de séances sur un même jour."""
     return max([len(_byday.get((code,cls,d),[])) for d in DAYS]+[1])
 
+def tag_of(r):
+    """Repère de parité vu du GROUPE : une séance à groupes alternés a lieu chaque
+    semaine pour l'enseignant, mais une semaine sur deux pour chacun de ses groupes."""
+    ry=r['rythme']
+    if ry=='Quinzaine A' or (ry=='Hebdo · groupes alternés' and r['parite']=='A'): return '   ◆ Q-A'
+    if ry=='Quinzaine B' or (ry=='Hebdo · groupes alternés' and r['parite']=='B'): return '   ◆ Q-B'
+    if ry=='Exception': return '   ◆ PONCTUEL'
+    return ''
+
 def label(r):
-    tag={'Quinzaine A':'   ◆ Q-A','Quinzaine B':'   ◆ Q-B','Exception':'   ◆ PONCTUEL'}.get(r['rythme'],'')
-    p=[f"{r['debut']} - {r['fin']}"+tag, r['matiere'], r['prof']]
+    p=[f"{r['debut']} - {r['fin']}"+tag_of(r)+('   ◆ OPTION' if r.get('option')=='Oui' else ''), r['matiere'], r['prof']]
+    if r['nbgr']>1: p.append('⊕ '+r['groupes'])     # séance partagée : on nomme les groupes réunis
     if r['notes']: p.append(r['notes'])
     return '\n'.join(p)
+
+def _nlines(r):
+    n =max(1,math.ceil(len(f"{r['debut']} - {r['fin']}"+tag_of(r)+('   ◆ OPTION' if r.get('option')=='Oui' else ''))/CPL))
+    n+=max(1,math.ceil(len(r['matiere'])/CPL))+max(1,math.ceil(len(r['prof'])/CPL))
+    if r['nbgr']>1: n+=max(1,math.ceil(len('⊕ '+r['groupes'])/CPL))
+    if r['notes']:  n+=max(1,math.ceil(len(r['notes'])/CPL))
+    return n
 
 def subrow_h(code,cls,n):
     """Hauteur d'une sous-ligne = nb de lignes de texte de la case la plus chargée ce jour-là."""
     mx=3
     for d in DAYS:
         lst=_byday.get((code,cls,d),[])
-        if len(lst)<n: continue
-        r=lst[n-1]
-        L=1+max(1,math.ceil(len(r['matiere'])/CPL))+max(1,math.ceil(len(r['prof'])/CPL))
-        if r['notes']: L+=max(1,math.ceil(len(r['notes'])/CPL))
-        mx=max(mx,L)
+        if len(lst)>=n: mx=max(mx,_nlines(lst[n-1]))
     return mx*15.2+7
 
 def build_grid(wbk, week, static, with_note=True):
@@ -287,9 +321,8 @@ def build_grid(wbk, week, static, with_note=True):
          ('Contenu généré automatiquement depuis la feuille Planning.' if mois=='Octobre'
           else 'Contenu issu du fichier d’origine, repris depuis la feuille Planning.'))
     title_block(G,'H', f"{code} · {per.upper()}   |   SEMAINE {par}{ref}",
-      "Chaque case = une séance : 1re ligne l’horaire, 2e la matière, 3e l’enseignant.   "
-      "La couleur indique la famille de matières.   ◆ Q-A / ◆ Q-B = séance par quinzaine.   "
-      f"Case grise = aucune séance.   {src}", h2=26)
+      "Une case = une séance : horaire / matière / enseignant.   Couleur = famille de matières.   "
+      "◆ Q-A ou Q-B = une semaine sur deux.   ⊕ = séance partagée.   ◆ OPTION = cours au choix.", h2=26)
     c=G.cell(3,1,'Classe / Groupe'); c.font=font(11,True,WHITE); c.fill=fill(INK2); c.alignment=CTR; c.border=BOX_M
     for k,day in enumerate(DAYS):
         dd=sd+datetime.timedelta(days=k)
@@ -318,7 +351,7 @@ def build_grid(wbk, week, static, with_note=True):
                         v=label(lst[n-1]) if len(lst)>=n else None
                     else:
                         key=f'$J$4&"|"&$A${x0}&"|"&{col}$4&"|{n}"'
-                        v=f'=IFERROR(VLOOKUP({key},Planning!$W:$X,2,0),"")'
+                        v=f'=IFERROR(VLOOKUP({key},Planning!$AC:$AD,2,0),"")'
                     cc=G.cell(x,2+k,v)
                     cc.font=font(FS_GRID); cc.alignment=LTOP; cc.border=BOX
                     cc.fill=fill(WEEKEND if k>=5 else WHITE)
@@ -356,7 +389,15 @@ A_=f'{PL}$A${R0}:$A${R1}'; C_=f'{PL}$C${R0}:$C${R1}'; D_=f'{PL}$D${R0}:$D${R1}'
 E_=f'{PL}$E${R0}:$E${R1}'; F_=f'{PL}$F${R0}:$F${R1}'; G_=f'{PL}$G${R0}:$G${R1}'
 H_=f'{PL}$H${R0}:$H${R1}'; I_=f'{PL}$I${R0}:$I${R1}'; J_=f'{PL}$J${R0}:$J${R1}'
 K_=f'{PL}$K${R0}:$K${R1}'; M_=f'{PL}$M${R0}:$M${R1}'; P_=f'{PL}$P${R0}:$P${R1}'
-Q_=f'{PL}$Q${R0}:$Q${R1}'; S_=f'{PL}$S${R0}:$S${R1}'; T_=f'{PL}$T${R0}:$T${R1}'; U_=f'{PL}$U${R0}:$U${R1}'
+Q_=f'{PL}$U${R0}:$U${R1}'   # Origine
+S_=f'{PL}$X${R0}:$X${R1}'   # conflit enseignant
+T_=f'{PL}$Y${R0}:$Y${R1}'   # conflit classe
+U_=f'{PL}$Z${R0}:$Z${R1}'   # doublon
+Z_=f'{PL}$AA${R0}:$AA${R1}' # partage incohérent
+OPT_=f'{PL}$W${R0}:$W${R1}' # cours en option
+PR_=f'{PL}$S${R0}:$S${R1}'  # ligne principale
+ID_=f'{PL}$T${R0}:$T${R1}'  # ID séance
+NB_=f'{PL}$R${R0}:$R${R1}'  # nb groupes
 CODES=[w[0] for w in WEEKS]
 
 # ==========================================================
@@ -369,6 +410,7 @@ V=wb.create_sheet('Vue Enseignants')
 ncol=2+7+1+7+1+1
 title_block(V,CL(ncol),'CHARGE PAR ENSEIGNANT — séances et heures par semaine',
   "Tableau entièrement calculé depuis la feuille Planning. « Heures » = somme des durées réelles. "
+  "Une séance partagée entre plusieurs groupes n'est comptée QU'UNE FOIS : c'est la charge réelle de l'enseignant. "
   "La colonne de droite signale tout chevauchement horaire détecté pour l’enseignant.")
 V.cell(3,1,'Enseignant'); V.cell(3,2,'Matière(s) — indicatif')
 V.merge_cells(start_row=3,start_column=3,end_row=3,end_column=9); V.cell(3,3,'NOMBRE DE SÉANCES')
@@ -389,8 +431,8 @@ for i,p in enumerate(profs):
     V.cell(x,1,p).alignment=LFT
     V.cell(x,2,', '.join(sorted(subj_by_prof.get(p,[])))).alignment=LFT
     for k,code in enumerate(CODES):
-        V.cell(x,3+k,f'=COUNTIFS({A_},"{code}",{M_},$A{x})').alignment=CTR
-        c=V.cell(x,11+k,f'=SUMIFS({H_},{A_},"{code}",{M_},$A{x})'); c.number_format='0.0'; c.alignment=CTR
+        V.cell(x,3+k,f'=COUNTIFS({A_},"{code}",{M_},$A{x},{PR_},"Oui")').alignment=CTR
+        c=V.cell(x,11+k,f'=SUMIFS({H_},{A_},"{code}",{M_},$A{x},{PR_},"Oui")'); c.number_format='0.0'; c.alignment=CTR
     V.cell(x,10,f'=SUM(C{x}:I{x})').alignment=CTR
     c=V.cell(x,18,f'=SUM(K{x}:Q{x})'); c.number_format='0.0'; c.alignment=CTR
     V.cell(x,19,f'=COUNTIFS({M_},$A{x},{S_},"⚠ CONFLIT")').alignment=CTR
@@ -425,8 +467,8 @@ for k,h in enumerate(['#','Contrôle','Règle appliquée','Attendu','Résultat',
     c=Ck.cell(3,k,h); c.font=font(9,True,WHITE); c.fill=fill(INK2); c.alignment=CTR; c.border=BOX_M
 Ck.row_dimensions[3].height=26
 CHECKS=[
- ("Conflits d’enseignant","Même enseignant, même date, horaires qui se chevauchent","0",f'=COUNTIF({S_},"⚠ CONFLIT")'),
- ("Conflits de classe","Même classe, même date, horaires qui se chevauchent","0",f'=COUNTIF({T_},"⚠ CONFLIT")'),
+ ("Conflits d’enseignant","Même enseignant, même date, horaires qui se chevauchent, séances différentes","0",f'=COUNTIF({S_},"⚠ CONFLIT")'),
+ ("Conflits de classe","Même groupe, même date, horaires qui se chevauchent, séances différentes","0",f'=COUNTIF({T_},"⚠ CONFLIT")'),
  ("Doublons de séance","Même date + classe + heure de début + matière","0",f'=COUNTIF({U_},"⚠ DOUBLON")'),
  ("Séances sans enseignant","Colonne Enseignant vide","0",f'=SUMPRODUCT(({A_}<>"")*({M_}=""))'),
  ("Séances sans horaire","Heure de début ou de fin vide","0",f'=SUMPRODUCT(({A_}<>"")*(({F_}="")+({G_}="")>0))'),
@@ -443,8 +485,15 @@ CHECKS=[
  ("Jour ≠ jour réel de la date","Libellé du jour incohérent avec la date","0",f'=SUMPRODUCT(({A_}<>"")*({D_}<>"")*({E_}<>CHOOSE(WEEKDAY({D_},2),"Lundi","Mardi","Mercredi","Jeudi","Vendredi","Samedi","Dimanche")))'),
  ("Classes sans séance (semaine A type S5)","Chaque classe doit avoir au moins 1 séance","0",f'=SUMPRODUCT(--(COUNTIFS({A_},"S5",{J_},LST_Classes)=0))'),
  ("Classes sans séance (semaine B type S4)","Chaque classe doit avoir au moins 1 séance","0",f'=SUMPRODUCT(--(COUNTIFS({A_},"S4",{J_},LST_Classes)=0))'),
- ("Intégrité septembre — séances conservées","Les 301 séances d’origine doivent être toutes présentes","301",f'=COUNTIF({Q_},"Original (septembre)")'),
- ("Volume octobre généré","4 semaines : 99 + 101 + 99 + 101","400",f'=COUNTIF({Q_},"Généré (octobre)")'),
+ ("Intégrité septembre — lignes conservées","370 lignes groupe-séance (124 + 121 + 125)","370",f'=COUNTIF({Q_},"Original (septembre)")'),
+ ("Intégrité septembre — séances distinctes","301 séances (100 + 100 + 101)","301",f'=COUNTIFS({Q_},"Original (septembre)",{PR_},"Oui")'),
+ ("Volume octobre généré — lignes","490 lignes (120 + 125 + 120 + 125)","490",f'=COUNTIF({Q_},"Généré (octobre)")'),
+ ("Volume octobre généré — séances","400 séances (99 + 101 + 99 + 101)","400",f'=COUNTIFS({Q_},"Généré (octobre)",{PR_},"Oui")'),
+ ("Séances partagées — total","106 séances réunissant plusieurs groupes","106",f'=COUNTIFS({PR_},"Oui",{NB_},">1")'),
+ ("Séances partagées cohérentes","Toutes les lignes d’un même ID séance ont mêmes date, horaires, matière et enseignant","0",f'=COUNTIF({Z_},"⚠ INCOHÉRENT")'),
+ ("Lignes principales = séances","Exactement une ligne principale par ID séance","0",f'=SUMPRODUCT(--(COUNTIFS({ID_},{ID_},{PR_},"Oui")<>1))'),
+ ("Lignes sans ID séance","Chaque ligne doit porter un ID","0",f'=SUMPRODUCT(({A_}<>"")*({ID_}=""))'),
+ ("Chevauchements admis (cours en option)","Espagnol / Italien sur le même créneau : le groupe se scinde, ce n’est pas un conflit",'—',f'=COUNTIF({OPT_},"Oui")'),
  ("Séances tombant un jour férié signalé","Jeudi 15/10/2026 (Fête de l’Évacuation) — à confirmer",'—',f'=COUNTIFS({D_},DATE(2026,10,15))'),
 ]
 x=4
@@ -455,7 +504,7 @@ for i,(lib,regle,att,formule) in enumerate(CHECKS,1):
     Ck.cell(x,4,att).alignment=CTR
     Ck.cell(x,5,formule).alignment=CTR
     if att=='—':
-        Ck.cell(x,6,f'=IF($E{x}=0,"Aucune séance ce jour-là","À CONFIRMER : "&$E{x}&" séance(s) planifiée(s) le 15/10")')
+        Ck.cell(x,6,f'=IF($B{x}="Séances tombant un jour férié signalé",IF($E{x}=0,"Aucune séance ce jour-là","À CONFIRMER : "&$E{x}&" ligne(s) planifiée(s) le 15/10"),"INFORMATIF : "&$E{x}&" ligne(s)")')
     else:
         Ck.cell(x,6,f'=IF($E{x}={att},"OK","À VÉRIFIER : "&$E{x}&" au lieu de {att}")')
     Ck.cell(x,6).alignment=LFT
@@ -480,12 +529,28 @@ for k,h in enumerate(['#','Élément concerné','Constat','Type','Décision','Ju
     c=Ck.cell(x,k,h); c.font=font(9,True,WHITE); c.fill=fill(INK2); c.alignment=CTR; c.border=BOX_M
 x+=1
 NOTES=[
- ("7éme (A) mercredi · 8éme (A) vendredi · 9éme (A) lundi — Physique (Melek)",
-  "Cellule porte la mention « /par quinzaine » mais la séance est présente dans les 3 semaines de septembre.",
-  "Étiquette contradictoire","Traitée comme HEBDOMADAIRE",
-  "Le fait observé (3 semaines sur 3) prime sur l’étiquette. Si le rythme est réellement quinzaine, passer la colonne Rythme à « Quinzaine A »."),
+ ("SÉANCES PARTAGÉES ENTRE PLUSIEURS GROUPES — 16 en semaine A, 14 en semaine B",
+  "Dans le fichier d’origine, une séance réunissant plusieurs groupes est écrite une seule fois, dans une cellule fusionnée qui déborde sur les blocs de toutes les classes concernées.",
+  "Structure","CONSERVÉES et rendues explicites",
+  "Chaque groupe a désormais sa propre ligne dans Planning, les lignes d’une même séance étant reliées par un ID séance commun. La grille affiche « ⊕ » suivi des groupes réunis. La charge enseignant ne compte la séance qu’une fois."),
+ ("Physique (Melek) — 7éme (A)+(B) mercredi, 8éme (A)+(B)+(C) vendredi, 9éme (A)+(B)+(C) lundi",
+  "Séances partagées sur tout un niveau, présentes les 3 semaines, mais portant la mention « /par quinzaine ».",
+  "Étiquette contradictoire","Traitées comme HEBDOMADAIRES et PARTAGÉES",
+  "Le fait observé (3 semaines sur 3, mêmes groupes) prime sur l’étiquette. Si le rythme est réellement une quinzaine, passer la colonne Rythme à « Quinzaine A »."),
+ ("13 séances à GROUPES ALTERNÉS (Espagnol, Italien, Philo, Arabe Najet, Français Nabil, Anglais Khaled, Anglais Imen Ben Lazrak, Anglais Imen Bennour, SVT Sabrine, Éveil Bassma, Anglais Samar)",
+  "La séance a lieu CHAQUE semaine, mais les groupes qui y assistent changent d’une semaine à l’autre.",
+  "Rythme","ALTERNANCE CONSERVÉE à l’identique",
+  "Vue de l’enseignant la séance est hebdomadaire ; vue d’un groupe elle revient une semaine sur deux, d’où le repère ◆ Q-A / ◆ Q-B dans la grille. Le détail des deux jeux de groupes figure dans Planning (colonne Séance partagée avec)."),
+ ("Samedi 17:30–19:00 — SVT (Sabrine) et Anglais (Imen Ben Lazrak) en 8éme",
+  "Semaine A : SVT pour 8éme (A), Anglais pour 8éme (B)+(C). Semaine B : l’inverse.",
+  "Rythme","ALTERNANCE CONSERVÉE, 8éme (C) incluse",
+  "8éme (C) fait bien partie du groupe partagé ; l’oublier la priverait de sa séance du samedi."),
+ ("COURS EN OPTION — Espagnol (Imen) et Italien (Amel), mardi 19:15–20:45",
+  "Les deux séances se chevauchent pour un même groupe : Bac SCE en semaine A, 3éme INFO en semaine B. Présent tel quel dans les 3 semaines d’origine.",
+  "Chevauchement volontaire","Marqué « Cours en option » ; EXCLU de la détection de conflit de groupe",
+  "Lecture retenue : le groupe se scinde, chaque élève suit l’une OU l’autre langue. Sans ce marquage, le classeur signalerait 14 faux conflits en permanence. Si ce n’est PAS une option, videz la colonne « Cours en option » : le conflit sera alors signalé."),
  ("3éme INFO — STI (Aymen)",
-  "Dimanche 15:30–17:30 en semaine du 21/09 uniquement, puis lundi 15:30–17:30 dans la semaine de référence.",
+  "Dimanche 15:30–17:30 dans la seule semaine du 21/09, puis lundi 15:30–17:30 dans la semaine de référence.",
   "AMBIGU","Traitée comme HEBDOMADAIRE le lundi",
   "La semaine de référence est la source prioritaire et ne porte aucune mention de quinzaine. À arbitrer : si la séance est en quinzaine, la retirer des semaines B (S4 et S6)."),
  ("2éme INFO — Informatique (Aymen)",
@@ -505,24 +570,20 @@ NOTES=[
   "Séance ponctuelle","NON reconduite en octobre",
   "Séance de rattrapage explicitement ponctuelle : la reconduire créerait des séances inexistantes."),
  ("Histoire / Géographie (Abdelwaheb) — 2éme Eco, 3éme Eco, Bac Eco",
-  "Le même créneau porte « Histoire » en S1 et S3, « Géographie » en S2. Aucune mention de quinzaine.",
-  "Alternance non étiquetée","Alternance CONSERVÉE (Histoire en semaine A, Géographie en semaine B)",
+  "Le même créneau porte « Histoire » en semaine A et « Géographie » en semaine B. Aucune mention de quinzaine. Ces trois séances ne sont PAS partagées : chaque groupe a son propre horaire.",
+  "Alternance de matière","Alternance CONSERVÉE",
   "Rythme déduit de l’observation sur 3 semaines. Ajouter la mention de quinzaine dans la source éviterait toute ambiguïté."),
- ("Espagnol (Imen) et Italien (Amel)",
-  "Le créneau du mardi 19:15–20:45 alterne entre Bac Eco / 3éme Eco (Espagnol) et Bac SCE / 3éme INFO (Italien), sans mention de quinzaine.",
-  "Alternance non étiquetée","Alternance CONSERVÉE",
-  "Même logique : alternance stricte constatée sur les 3 semaines."),
- ("2éme Eco — Français (Nabil) vendredi 17:30–19:00",
-  "Présente en S1 et S3, absente en S2 ; la mention « /par quinzaine » est absente alors que le créneau alterne avec Bac Eco.",
-  "Mention manquante","Traitée comme QUINZAINE A",
-  "Alternance stricte avec Bac Eco sur le même créneau et le même enseignant."),
+ ("Mardi 19:15–20:45 en 2éme — Anglais (Imen Bennour) et Arabe (Najet)",
+  "Le créneau partagé par 2éme Eco + 2éme SCE + 2éme INFO porte l’Anglais en semaine A et l’Arabe en semaine B.",
+  "Alternance de matière sur créneau partagé","CONSERVÉE",
+  "Deux séances distinctes en quinzaine, l’une en semaine A, l’autre en semaine B, sur le même groupe de trois classes."),
  ("Enseignante « Imen Ghoumem » / « Imen Ghoumeme »",
   "Deux orthographes pour la même personne (1ére (B) et 1ére (A), SVT dimanche).",
   "Orthographe","Septembre laissé INTACT ; octobre unifié en « Imen Ghoumeme »",
   "Les données d’origine ne sont pas modifiées. Corriger la source si « Ghoumeme » est la bonne orthographe."),
  ("Mentions « /par quizaine » et « /Par quizaine »",
   "4 cellules comportent une faute de frappe sur « quinzaine ».",
-  "Orthographe","Rythme normalisé dans la colonne Rythme ; texte d’origine conservé en colonne Y",
+  "Orthographe","Rythme normalisé dans la colonne Rythme ; texte d’origine conservé en colonne AD",
   "Aucune perte : le libellé brut d’origine reste consultable."),
  ("Salle et Mode (présentiel / en ligne)",
   "Ces deux informations sont totalement absentes du fichier d’origine.",
@@ -578,15 +639,18 @@ def drow(x,vals,nf=None,bold=False,shade=None,start=1):
     return x+1
 
 x=band(x,'INDICATEURS CLÉS (sur l’ensemble de la période 14/09 → 01/11/2026)')
-KPI=[('Séances planifiées (total)',f'=COUNTA({A_})','0'),
-     ('Heures d’enseignement (total)',f'=SUM({H_})','0.0'),
-     ('Séances de septembre (d’origine)',f'=COUNTIF({Q_},"Original (septembre)")','0'),
-     ('Séances d’octobre (générées)',f'=COUNTIF({Q_},"Généré (octobre)")','0'),
+KPI=[('Séances planifiées (total)',f'=COUNTIF({PR_},"Oui")','0'),
+     ('dont séances partagées',f'=COUNTIFS({PR_},"Oui",{NB_},">1")','0'),
+     ('Lignes groupe-séance',f'=COUNTA({A_})','0'),
+     ('Heures d’enseignement (total)',f'=SUMIF({PR_},"Oui",{H_})','0.0'),
+     ('Séances de septembre (d’origine)',f'=COUNTIFS({Q_},"Original (septembre)",{PR_},"Oui")','0'),
+     ('Séances d’octobre (générées)',f'=COUNTIFS({Q_},"Généré (octobre)",{PR_},"Oui")','0'),
      ('Classes / groupes',f'=COUNTA(LST_Classes)','0'),
      ('Enseignants',f'=COUNTA(LST_Profs)','0'),
      ('Matières distinctes',f'=COUNTA(LST_Matieres)','0'),
-     ('Séances par quinzaine',f'=COUNTIF({P_},"Quinzaine A")+COUNTIF({P_},"Quinzaine B")','0'),
-     ('⚠ Anomalies détectées',f'=COUNTIF({S_},"⚠ CONFLIT")+COUNTIF({T_},"⚠ CONFLIT")+COUNTIF({U_},"⚠ DOUBLON")','0')]
+     ('Séances à rythme quinzaine',f'=COUNTIFS({P_},"Quinzaine A",{PR_},"Oui")+COUNTIFS({P_},"Quinzaine B",{PR_},"Oui")','0'),
+     ('Séances à groupes alternés',f'=COUNTIFS({P_},"Hebdo · groupes alternés",{PR_},"Oui")','0'),
+     ('⚠ Anomalies détectées',f'=COUNTIF({S_},"⚠ CONFLIT")+COUNTIF({T_},"⚠ CONFLIT")+COUNTIF({U_},"⚠ DOUBLON")+COUNTIF({Z_},"⚠ INCOHÉRENT")','0')]
 x=hrow(x,['Indicateur','Valeur'])
 k0=x
 for lib,f_,nf in KPI:
@@ -597,13 +661,13 @@ Rc.conditional_formatting.add(f'B{k0}:B{x-1}', FormulaRule(formula=[f'AND(ROW()=
 x+=1
 
 x=band(x,'VOLUME PAR SEMAINE')
-x=hrow(x,['Semaine','Période','Parité','Séances','Heures','dont Hebdo','dont Quinz.','dont Ponct.','Classes actives','Enseignants','Moy. h / séance'])
+x=hrow(x,['Semaine','Période','Parité','Séances','Heures','dont partagées','dont Quinz. / alternées','dont Ponct.','Classes actives','Enseignants','Moy. h / séance'])
 for code,start,par,per,shname,mois in WEEKS:
     x=drow(x,[code,per,par,
-      f'=COUNTIF({A_},"{code}")', f'=SUMIF({A_},"{code}",{H_})',
-      f'=COUNTIFS({A_},"{code}",{P_},"Hebdomadaire")',
-      f'=COUNTIFS({A_},"{code}",{P_},"Quinzaine A")+COUNTIFS({A_},"{code}",{P_},"Quinzaine B")',
-      f'=COUNTIF({A_},"{code}")-D{x}+0*0' if False else f'=COUNTIFS({A_},"{code}",{P_},"Exception")+COUNTIFS({A_},"{code}",{P_},"Ponctuelle / modifiée")',
+      f'=COUNTIFS({A_},"{code}",{PR_},"Oui")', f'=SUMIFS({H_},{A_},"{code}",{PR_},"Oui")',
+      f'=COUNTIFS({A_},"{code}",{PR_},"Oui",{NB_},">1")',
+      f'=COUNTIFS({A_},"{code}",{PR_},"Oui",{P_},"Quinzaine A")+COUNTIFS({A_},"{code}",{PR_},"Oui",{P_},"Quinzaine B")+COUNTIFS({A_},"{code}",{PR_},"Oui",{P_},"Hebdo · groupes alternés")',
+      f'=COUNTIFS({A_},"{code}",{PR_},"Oui",{P_},"Exception")+COUNTIFS({A_},"{code}",{PR_},"Oui",{P_},"Ponctuelle / modifiée")',
       f'=SUMPRODUCT(--(COUNTIFS({A_},"{code}",{J_},LST_Classes)>0))',
       f'=SUMPRODUCT(--(COUNTIFS({A_},"{code}",{M_},LST_Profs)>0))',
       f'=IFERROR(E{x}/D{x},"")'],
@@ -616,13 +680,13 @@ x=drow(x,['TOTAL','—','—']+[f'=SUM({CL(k)}{xt-7}:{CL(k)}{xt-1})' for k in ra
        nf={5:'0.0',11:'0.00'}, bold=True, shade=GREY_H)
 x+=1
 
-x=band(x,'SÉANCES PAR CYCLE ET PAR SEMAINE')
+x=band(x,'LIGNES GROUPE-SÉANCE PAR CYCLE ET PAR SEMAINE (une séance partagée compte pour chacun de ses groupes)')
 x=hrow(x,['Cycle','Nb classes']+CODES+['Total'])
 for cy,classes in CYCLES:
     x=drow(x,[cy,len(classes)]+[f'=COUNTIFS({A_},"{c}",{I_},$A{x})' for c in CODES]+[f'=SUM(C{x}:I{x})'],bold=False)
 x+=1
 
-x=band(x,'SÉANCES ET HEURES PAR MATIÈRE (période complète)')
+x=band(x,'PAR MATIÈRE (période complète) — en lignes groupe-séance')
 x=hrow(x,['Matière','Normalisée','Séances','Heures','Enseignants','Classes','Part des séances'])
 for m_ in matieres:
     x=drow(x,[m_,
@@ -637,8 +701,8 @@ x=band(x,'RÉPARTITION PAR JOUR (semaine A type = S5 · semaine B type = S4)')
 x=hrow(x,['Jour','Séances semaine A','Heures semaine A','Séances semaine B','Heures semaine B','1re séance (A)','Dernière fin (A)'])
 for day in DAYS:
     x=drow(x,[day,
-      f'=COUNTIFS({A_},"S5",{E_},$A{x})', f'=SUMIFS({H_},{A_},"S5",{E_},$A{x})',
-      f'=COUNTIFS({A_},"S4",{E_},$A{x})', f'=SUMIFS({H_},{A_},"S4",{E_},$A{x})',
+      f'=COUNTIFS({A_},"S5",{E_},$A{x},{PR_},"Oui")', f'=SUMIFS({H_},{A_},"S5",{E_},$A{x},{PR_},"Oui")',
+      f'=COUNTIFS({A_},"S4",{E_},$A{x},{PR_},"Oui")', f'=SUMIFS({H_},{A_},"S4",{E_},$A{x},{PR_},"Oui")',
       f'=IFERROR(MINIFS({F_},{A_},"S5",{E_},$A{x}),"")',
       f'=IFERROR(MAXIFS({G_},{A_},"S5",{E_},$A{x}),"")'], nf={3:'0.0',5:'0.0',6:'hh:mm',7:'hh:mm'})
 Rc.freeze_panes='A4'
@@ -670,13 +734,13 @@ x=sband(x,'NAVIGATION — cliquer sur un nom de feuille')
 for k,h in enumerate(['Feuille','Contenu','Séances','Type'],2):
     c=So.cell(x,k,h); c.font=font(9,True,WHITE); c.fill=fill(INK2); c.alignment=CTR; c.border=BOX_M
 x+=1
-NAV=[('Planning','Table de référence : 1 ligne = 1 séance. C’est ICI que l’on modifie les données.',f'=COUNTA({A_})','Saisie'),
+NAV=[('Planning','Table de référence : 1 ligne = 1 groupe dans une séance. C’est ICI que l’on modifie les données.',f'=COUNTIF({PR_},"Oui")','Saisie'),
      ('Référentiels','Listes des classes, matières, enseignants, salles, modes, rythmes et semaines.','—','Paramètres'),
      ('Contrôles','21 contrôles automatiques + toutes les décisions prises pour construire octobre.','—','Fiabilité'),
      ('Récapitulatif','Indicateurs : volumes par semaine, cycle, matière et jour.','—','Pilotage'),
      ('Vue Enseignants','Charge de chaque enseignant, semaine par semaine (séances et heures).','—','Pilotage')]
 for shname,code,per,par,mois in grid_sheets:
-    NAV.append((shname,f'Grille imprimable — {per} (semaine {par}).',f'=COUNTIF({A_},"{code}")',
+    NAV.append((shname,f'Grille imprimable — {per} (semaine {par}).',f'=COUNTIFS({A_},"{code}",{PR_},"Oui")',
                 'Référence' if code=='S3' else ('Septembre' if mois=='Septembre' else 'Octobre')))
 for name,desc,cnt,typ in NAV:
     c=So.cell(x,2,name); c.font=Font(name=F,size=10,bold=True,color='1F5C86',underline='single')
@@ -701,8 +765,10 @@ LEG=([('__TITRE__','COULEUR DES CASES — famille de matières','','','')]
       ('Secondaire','1ére, 2éme et 3éme (8 groupes)','','',''),
       ('Bac','Bac Eco, Bac SCE, Bac INFO','','','')]
    + [('__TITRE__','REPÈRES DANS LE TEXTE','','','')]
-   + [('◆ Q-A','Séance par quinzaine, semaines A : 14/09 · 28/09 · 12/10 · 26/10','','',''),
-      ('◆ Q-B','Séance par quinzaine, semaines B : 21/09 · 05/10 · 19/10','','',''),
+   + [('◆ Q-A','Ce groupe a la séance en semaines A : 14/09 · 28/09 · 12/10 · 26/10','','',''),
+      ('◆ Q-B','Ce groupe a la séance en semaines B : 21/09 · 05/10 · 19/10','','',''),
+      ('⊕','Séance PARTAGÉE : les groupes réunis sur ce créneau sont listés à la suite','','',''),
+      ('◆ OPTION','Cours au choix : le groupe se scinde sur ce créneau (Espagnol OU Italien)','','',''),
       ('◆ EN LIGNE','Séance à distance (à renseigner dans la colonne Mode de Planning)','','',''),
       ('◆ PONCTUEL','Séance exceptionnelle, non récurrente (ex. rattrapage)','','',''),
       ('Case grisée','Aucune séance sur ce créneau','','',''),
@@ -736,7 +802,7 @@ HOW=[('1','Modifier, ajouter ou supprimer une séance','Tout se passe dans la fe
      ('2','Ajouter une séance','Insérer une ligne dans Planning, puis recopier les formules des colonnes H, S, T, U, V, W et X depuis la ligne du dessus (double-clic sur la poignée de recopie).'),
      ('3','Renseigner une salle ou une séance en ligne','Colonnes Salle et Mode de Planning (menus déroulants). L’indication apparaît aussitôt dans la grille de la semaine.'),
      ('4','Vérifier la fiabilité','Ouvrir la feuille Contrôles : la colonne Statut doit afficher « OK » partout.'),
-     ('5','Imprimer ou envoyer en PDF','Chaque grille est déjà paramétrée : A4 paysage, 1 page de large, un cycle par page, en-têtes répétés. Fichier ▸ Exporter au format PDF.'),
+     ('5','Imprimer ou envoyer en PDF','Chaque grille est déjà paramétrée : A4 paysage, 1 page de large, saut de page à chaque changement de cycle, en-têtes répétés. Fichier ▸ Exporter au format PDF.'),
      ('6','Préparer novembre','Dupliquer une grille d’octobre, renommer l’onglet, mettre à jour la cellule J4 (masquée) avec le nouveau code de semaine, ajouter la semaine dans Référentiels, puis ajouter ses lignes dans Planning (filtrer une semaine existante, copier, coller et changer Semaine / Période / Date).')]
 for k,h in enumerate(['#','Action','Comment faire'],2):
     c=So.cell(x,k,h); c.font=font(9,True,WHITE); c.fill=fill(INK2); c.alignment=CTR; c.border=BOX_M
@@ -751,8 +817,9 @@ x+=1
 x=sband(x,'À LIRE AVANT UTILISATION')
 WARN=[("Salle et Mode (présentiel / en ligne) sont absents du fichier d’origine : les colonnes existent mais sont vides. Aucune valeur n’a été inventée."),
       ("Le planning d’octobre a été construit à partir de la semaine du 28/09 au 04/10, désignée comme référence. Les séances par quinzaine ont été identifiées en comparant les 3 semaines de septembre."),
-      ("Les 301 séances de septembre sont conservées à l’identique, y compris les fautes de frappe d’origine (colonne « Texte d’origine » de Planning)."),
-      ("14 décisions et points ambigus sont détaillés en bas de la feuille Contrôles. Trois méritent votre arbitrage : les Physique « /par quinzaine » de Melek, le STI du lundi en 3éme INFO, et le jeudi 15/10 (jour férié)."),
+      ("Les 301 séances de septembre — soit 370 lignes groupe-séance — sont conservées à l’identique, y compris les fautes de frappe d’origine (colonne « Texte d’origine » de Planning)."),
+      ("Les séances partagées entre plusieurs groupes (Physique de Melek, Espagnol, Italien, Français de Nassima…) sont conservées comme telles : un groupe par ligne, reliés par un même ID séance, et « ⊕ » dans la grille."),
+      ("17 décisions et points ambigus sont détaillés en bas de la feuille Contrôles. Trois méritent votre arbitrage : les Physique « /par quinzaine » de Melek, le STI du lundi en 3éme INFO, et le jeudi 15/10 (jour férié)."),
       ("Les grilles hebdomadaires sont calculées par formules : à la première ouverture, laisser Excel recalculer (ou appuyer sur F9).")]
 for w_ in WARN:
     So.merge_cells(start_row=x,start_column=2,end_row=x,end_column=5)
