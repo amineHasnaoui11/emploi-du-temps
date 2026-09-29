@@ -54,6 +54,19 @@ MATIERES=[
 ]
 MAT_COLOR={lab:c for _n,c,labs in MATIERES for lab in labs}
 
+# --- Statuts : posés par l'utilisateur dans Planning, PRIORITAIRES sur la
+#     couleur de matière. Ce sont les seules règles conditionnelles des grilles,
+#     pour que toute autre cellule reste colorable à la main.
+STATUTS=[
+         ('Annulé', 'F5A7A0'),
+         ('Examen / Devoir', 'F7D154'),
+         ('Rattrapage', 'C9A0DC'),
+         ('À confirmer', 'F9C784'),
+         ('Changement de salle', '8FC7E8'),
+         ('Séance en ligne', '9FE0C8'),
+]
+
+
 F='Arial'
 def font(sz=10,b=False,c='1B2A41',i=False): return Font(name=F,size=sz,bold=b,color=c,italic=i)
 def fill(c): return PatternFill('solid',fgColor=c)
@@ -105,19 +118,19 @@ P = wb.create_sheet('Planning')
 HDR = ['Semaine','Période','Parité','Date','Jour','Début','Fin','Durée (h)','Cycle','Classe / Groupe',
        'Matière','Matière (normalisée)','Enseignant','Salle','Mode','Rythme',
        'Séance partagée avec','Nb groupes','Ligne principale','ID séance','Origine','Notes',
-       'Cours en option','⚠ Conflit enseignant','⚠ Conflit classe','⚠ Doublon','⚠ Partage incohérent',
+       'Statut','Cours en option','⚠ Conflit enseignant','⚠ Conflit classe','⚠ Doublon','⚠ Partage incohérent',
        'Rang','Clé','Libellé grille','Texte d\'origine','Réf. cellule source']
-WID = [9,30,7,11,11,7.5,7.5,9,12,18,20,19,17,10,12,24,34,9,12,11,19,30,14,19,17,12,17,7,34,46,52,26]
+WID = [9,30,7,11,11,7.5,7.5,9,12,18,20,19,17,10,12,24,34,9,12,11,19,30,19,14,19,17,12,17,7,34,46,52,26]
 NB = len(rows); R0 = 4; R1 = R0+NB-1
 title_block(P, CL(len(HDR)),
   'PLANNING DES SÉANCES — Année scolaire 2026-2027',
   "TABLE DE RÉFÉRENCE : toute modification se fait ici. 1 ligne = 1 groupe dans une séance. "
   "Une séance partagée entre plusieurs groupes occupe autant de lignes que de groupes, reliées par le même ID séance "
   "(seule la 1re porte « Ligne principale = Oui », pour ne compter l'heure d'enseignement qu'une fois). "
-  "Colonnes X à AF = zone technique, ne pas saisir.")
+  "Colonnes Y à AG = zone technique, ne pas saisir.")
 for j,(h,w) in enumerate(zip(HDR,WID),1):
     c=P.cell(3,j,h); c.font=font(9,True,WHITE)
-    c.fill=fill(INK2 if j<17 else (ACC if j<21 else (INK2 if j<24 else ('B03A2E' if j<28 else '6B7A8C'))))
+    c.fill=fill(INK2 if j<17 else (ACC if j<21 else (INK2 if j<23 else ('9A6B1F' if j<25 else ('B03A2E' if j<29 else '6B7A8C')))))
     c.alignment=CTR; c.border=BOX_M
     P.column_dimensions[CL(j)].width=w
 P.row_dimensions[3].height=34
@@ -146,52 +159,51 @@ for i,r in enumerate(rows):
     P.cell(x,20,r['seance']).alignment=CTR
     P.cell(x,21,r['origine']).alignment=LFT
     P.cell(x,22,r['notes']).alignment=LFT
-    P.cell(x,23,r.get('option','')).alignment=CTR
+    P.cell(x,23,None).alignment=CTR                 # Statut : à renseigner par l'utilisateur
+    P.cell(x,24,r.get('option','')).alignment=CTR
     # --- contrôles vivants ---
     # Une séance partagée occupe plusieurs lignes au même horaire : on ne compte comme
     # conflit que les chevauchements portant un ID SÉANCE DIFFÉRENT. Et deux cours en
     # option sur le même créneau (LV3 Espagnol / Italien) ne sont pas un conflit.
-    P.cell(x,24,f'=IF($M{x}="","",IF(SUMPRODUCT(($D${R0}:$D${R1}=$D{x})*($M${R0}:$M${R1}=$M{x})*($T${R0}:$T${R1}<>$T{x})*($F${R0}:$F${R1}<$G{x})*($G${R0}:$G${R1}>$F{x}))>0,"⚠ CONFLIT",""))').alignment=CTR
-    P.cell(x,25,(f'=IF($J{x}="","",IF(SUMPRODUCT(($D${R0}:$D${R1}=$D{x})*($J${R0}:$J${R1}=$J{x})*($T${R0}:$T${R1}<>$T{x})'
-                 f'*($F${R0}:$F${R1}<$G{x})*($G${R0}:$G${R1}>$F{x})*(1-($W${R0}:$W${R1}="Oui")*($W{x}="Oui")))>0,"⚠ CONFLIT",""))')).alignment=CTR
-    P.cell(x,26,f'=IF(COUNTIFS($D${R0}:$D${R1},$D{x},$J${R0}:$J${R1},$J{x},$F${R0}:$F${R1},$F{x},$K${R0}:$K${R1},$K{x})>1,"⚠ DOUBLON","")').alignment=CTR
-    # toutes les lignes d'un même ID doivent partager date, horaires, matière et enseignant
-    P.cell(x,27,(f'=IF(COUNTIF($T${R0}:$T${R1},$T{x})<>COUNTIFS($T${R0}:$T${R1},$T{x},$D${R0}:$D${R1},$D{x},'
+    P.cell(x,25,f'=IF($M{x}="","",IF(SUMPRODUCT(($D${R0}:$D${R1}=$D{x})*($M${R0}:$M${R1}=$M{x})*($T${R0}:$T${R1}<>$T{x})*($F${R0}:$F${R1}<$G{x})*($G${R0}:$G${R1}>$F{x}))>0,"⚠ CONFLIT",""))').alignment=CTR
+    P.cell(x,26,(f'=IF($J{x}="","",IF(SUMPRODUCT(($D${R0}:$D${R1}=$D{x})*($J${R0}:$J${R1}=$J{x})*($T${R0}:$T${R1}<>$T{x})'
+                 f'*($F${R0}:$F${R1}<$G{x})*($G${R0}:$G${R1}>$F{x})*(1-($X${R0}:$X${R1}="Oui")*($X{x}="Oui")))>0,"⚠ CONFLIT",""))')).alignment=CTR
+    P.cell(x,27,f'=IF(COUNTIFS($D${R0}:$D${R1},$D{x},$J${R0}:$J${R1},$J{x},$F${R0}:$F${R1},$F{x},$K${R0}:$K${R1},$K{x})>1,"⚠ DOUBLON","")').alignment=CTR
+    P.cell(x,28,(f'=IF(COUNTIF($T${R0}:$T${R1},$T{x})<>COUNTIFS($T${R0}:$T${R1},$T{x},$D${R0}:$D${R1},$D{x},'
                  f'$F${R0}:$F${R1},$F{x},$G${R0}:$G${R1},$G{x},$K${R0}:$K${R1},$K{x},$M${R0}:$M${R1},$M{x}),"⚠ INCOHÉRENT","")')).alignment=CTR
-    P.cell(x,28,f'=COUNTIFS($A${R0}:$A{x},$A{x},$J${R0}:$J{x},$J{x},$E${R0}:$E{x},$E{x})').alignment=CTR
-    P.cell(x,29,f'=$A{x}&"|"&$J{x}&"|"&$E{x}&"|"&$AB{x}').alignment=LFT
-    P.cell(x,30,(f'=TEXT($F{x},"hh:mm")&"-"&TEXT($G{x},"hh:mm")'
+    P.cell(x,29,f'=COUNTIFS($A${R0}:$A{x},$A{x},$J${R0}:$J{x},$J{x},$E${R0}:$E{x},$E{x})').alignment=CTR
+    P.cell(x,30,f'=$A{x}&"|"&$J{x}&"|"&$E{x}&"|"&$AC{x}').alignment=LFT
+    P.cell(x,31,(f'=IF($W{x}<>"","⚑ "&$W{x}&CHAR(10),"")'
+                 f'&TEXT($F{x},"hh:mm")&"-"&TEXT($G{x},"hh:mm")'
                  f'&IF(OR($P{x}="Quinzaine A",AND($P{x}="Hebdo · groupes alternés",$C{x}="A"))," Q-A",'
                  f'IF(OR($P{x}="Quinzaine B",AND($P{x}="Hebdo · groupes alternés",$C{x}="B"))," Q-B",'
                  f'IF($P{x}="Exception"," PONCT.","")))'
-                 f'&IF($W{x}="Oui"," OPT","")'
+                 f'&IF($X{x}="Oui"," OPT","")'
                  f'&CHAR(10)&$K{x}&CHAR(10)&$M{x}'
-                 f'&IF($N{x}<>"",CHAR(10)&"Salle "&$N{x},"")&IF($O{x}="En ligne",CHAR(10)&"◆ EN LIGNE","")'
+                 f'&IF($N{x}<>"",CHAR(10)&"Salle "&$N{x},"")&IF($O{x}="En ligne",CHAR(10)&"EN LIGNE","")'
                  f'&IF($V{x}<>"",CHAR(10)&$V{x},"")')).alignment=LTOP
-    P.cell(x,31,r['brut']).alignment=LFT
-    P.cell(x,32,r['src']).alignment=LFT
+    P.cell(x,32,r['brut']).alignment=LFT
+    P.cell(x,33,r['src']).alignment=LFT
     for j in range(1,len(HDR)+1):
         cc=P.cell(x,j); cc.font=font(9); cc.border=BOX
-        if j>=24: cc.font=font(8,c='6B7A8C')
+        if j<=22: cc.fill=fill(CYC_FILL[r['cycle']])          # teinte de cycle, posée en dur
+        if j in (11,12): cc.fill=fill(MAT_COLOR.get(r['matiere'], CYC_FILL[r['cycle']]))
+        if j>=25: cc.font=font(8,c='6B7A8C')
     P.row_dimensions[x].height=15
 
 P.freeze_panes='F4'
 P.auto_filter.ref=f'A3:{CL(len(HDR))}{R1}'
-rng=f'A{R0}:V{R1}'
-for cy,f_ in CYC_FILL.items():
-    P.conditional_formatting.add(rng, FormulaRule(formula=[f'$I{R0}="{cy}"'], fill=fill(f_), stopIfTrue=False))
-for _nom,_col,_mats in MATIERES:   # couleur propre à chaque matière
-    _test='+'.join(f'($K{R0}="{m}")' for m in _mats)
-    P.conditional_formatting.add(f'K{R0}:L{R1}', FormulaRule(formula=[f'({_test})>0'], fill=fill(_col), stopIfTrue=True))
+# Fonds posés en dur ci-dessus : ils restent donc modifiables à la main.
+# Seules les ALERTES et les STATUTS gardent une mise en forme conditionnelle,
+# parce qu'ils doivent justement l'emporter sur toute couleur manuelle.
+for _nom,_col in STATUTS:
+    P.conditional_formatting.add(f'W{R0}:W{R1}', FormulaRule(formula=[f'$W{R0}="{_nom}"'], fill=fill(_col), stopIfTrue=True))
 P.conditional_formatting.add(f'P{R0}:P{R1}', FormulaRule(formula=[f'LEFT($P{R0},9)="Quinzaine"'], font=font(9,True,QUINZ_FG)))
 P.conditional_formatting.add(f'P{R0}:P{R1}', FormulaRule(formula=[f'$P{R0}="Hebdo · groupes alternés"'], font=font(9,True,ACC)))
-P.conditional_formatting.add(f'P{R0}:P{R1}', FormulaRule(formula=[f'$P{R0}="Exception"'], font=font(9,True,ALERT_FG)))
-P.conditional_formatting.add(f'W{R0}:W{R1}', FormulaRule(formula=[f'$W{R0}="Oui"'], fill=fill('FEF5E7'), font=font(9,True,QUINZ_FG)))
-P.conditional_formatting.add(f'Q{R0}:R{R1}', FormulaRule(formula=[f'$R{R0}>1'], fill=fill('E4EFF2'), font=font(9,True,'1F5C86')))
 P.conditional_formatting.add(f'U{R0}:U{R1}', FormulaRule(formula=[f'$U{R0}="Généré (octobre)"'], font=font(9,False,ACC)))
-for col in ('X','Y','Z','AA'):
+for col in ('Y','Z','AA','AB'):
     P.conditional_formatting.add(f'{col}{R0}:{col}{R1}', FormulaRule(formula=[f'LEN(TRIM(${col}{R0}))>0'], fill=fill(ALERT_BG), font=font(8,True,ALERT_FG)))
-setup_print(P, titles='1:3', area=f'A1:W{R1}',
+setup_print(P, titles='1:3', area=f'A1:X{R1}',
             header='Planning des séances — RS 2026-2027', footer='RS 2026-2027 · Planning (table de référence)')
 P.sheet_properties.tabColor=INK
 
@@ -215,7 +227,8 @@ blocks=[('CLASSES / GROUPES',1,['Ordre','Classe / Groupe','Cycle','Séances sem.
          [[p,None,None] for p in profs],[18,15,15]),
         ('SALLES',15,['Salle (à compléter)'],[[None] for _ in range(12)],[18]),
         ('MODES',17,['Mode'],[[x] for x in modes],[14]),
-        ('RYTHMES',19,['Rythme'],[[x] for x in rythmes],[21])]
+        ('RYTHMES',19,['Rythme'],[[x] for x in rythmes],[21]),
+        ('STATUTS',28,['Statut (couleur prioritaire)'],[[n] for n,_c in STATUTS],[26])]
 for name,c0,hdrs,data,widths in blocks:
     Rf.cell(3,c0,name).font=font(9,True,WHITE)
     lastc=c0+len(hdrs)-1
@@ -244,6 +257,8 @@ for i,p in enumerate(profs):
     Rf.cell(x,13,f'=SUMIFS(Planning!$H${R0}:$H${R1},Planning!$A${R0}:$A${R1},"S5",Planning!$M${R0}:$M${R1},$K{x})')
     Rf.cell(x,13).number_format='0.0'
 # semaines
+for _i,(_n,_c) in enumerate(STATUTS):
+    Rf.cell(5+_i,28).fill=fill(_c)
 Rf.cell(3,21,'CALENDRIER DES SEMAINES').font=font(9,True,WHITE)
 Rf.merge_cells(start_row=3,start_column=21,end_row=3,end_column=26)
 for k in range(21,27): Rf.cell(3,k).fill=fill(ACC); Rf.cell(3,k).border=BOX_M; Rf.cell(3,k).alignment=CTR
@@ -265,11 +280,13 @@ defn = {'LST_Classes':f"Référentiels!$B$5:$B${4+len(CLASS_ORDER)}",
         'LST_Profs':f"Référentiels!$K$5:$K${4+len(profs)}",
         'LST_Salles':"Référentiels!$O$5:$O$16",
         'LST_Modes':f"Référentiels!$Q$5:$Q${4+len(modes)}",
-        'LST_Rythmes':f"Référentiels!$S$5:$S${4+len(rythmes)}"}
+        'LST_Rythmes':f"Référentiels!$S$5:$S${4+len(rythmes)}",
+        'LST_Statuts':f"Référentiels!$AB$5:$AB${4+len(STATUTS)}"}
 from openpyxl.workbook.defined_name import DefinedName
 for n,ref in defn.items(): wb.defined_names.add(DefinedName(n, attr_text=ref))
 for col,nm,strict in (('J','LST_Classes',False),('K','LST_Matieres',False),('M','LST_Profs',False),
-                      ('N','LST_Salles',False),('O','LST_Modes',True),('P','LST_Rythmes',True)):
+                      ('N','LST_Salles',False),('O','LST_Modes',True),('P','LST_Rythmes',True),
+                      ('W','LST_Statuts',True)):
     dv=DataValidation(type='list',formula1=f'={nm}',allow_blank=True,
                       errorStyle='stop' if strict else 'warning',
                       error="Valeur absente du référentiel.", errorTitle='Vérification',
@@ -317,7 +334,9 @@ def tag_of(r):
 
 def label(r):
     # Le partage n'est plus écrit : la fusion de la cellule le montre déjà.
-    p=[f"{r['debut']}-{r['fin']}"+tag_of(r), r['matiere'], r['prof']]
+    p=[]
+    if r.get('statut'): p.append('⚑ '+r['statut'])
+    p+=[f"{r['debut']}-{r['fin']}"+tag_of(r), r['matiere'], r['prof']]
     if r['notes']: p.append(r['notes'])
     return '\n'.join(p)
 
@@ -358,7 +377,7 @@ def build_grid(wbk, week, static):
     title_block(G,'H', f"{code} · {per.upper()}   |   SEMAINE {par}{ref}",
       "Une case = une séance : horaire / matière / enseignant.   Chaque matière a sa couleur.   "
       "Une case fusionnée sur plusieurs classes = séance commune à ces groupes.   "
-      "Q-A ou Q-B = une semaine sur deux.   OPT = cours au choix.", h2=26)
+      "Q-A ou Q-B = une semaine sur deux.   OPT = cours au choix.   Les couleurs sont modifiables à la main ; seul un statut ⚑ les remplace.", h2=26)
     c=G.cell(3,1,'Classe / Groupe'); c.font=font(11,True,WHITE); c.fill=fill(INK2); c.alignment=CTR; c.border=BOX_M
     for k,day in enumerate(DAYS):
         dd=sd+datetime.timedelta(days=k)
@@ -383,7 +402,7 @@ def build_grid(wbk, week, static):
                 r=TOP[cls]+sl
                 for k in range(7):
                     cc=G.cell(r,2+k); cc.font=font(FS_GRID,True,BLACK); cc.alignment=MID
-                    cc.border=BOX; cc.fill=fill(WEEKEND if k>=5 else WHITE)
+                    cc.border=BOX; cc.fill=fill('F2F0EA' if k>=5 else GREY_L)   # case vide
                 mx=3
                 for day in DAYS:
                     for rr in _byday.get((code,cls,day),[]):
@@ -434,16 +453,23 @@ def build_grid(wbk, week, static):
                         merges.append((r0,r1,col))
                     else:
                         r1=r0
-                    v = label(r) if static else f'=IFERROR(VLOOKUP("{r["seance"]}",Planning!$T:$AD,11,0),"")'
+                    v = label(r) if static else f'=IFERROR(VLOOKUP("{r["seance"]}",Planning!$T:$AE,12,0),"")'
                     cc=G.cell(r0,col,v); cc.font=font(FS_GRID,True,BLACK); cc.alignment=MID
+                    # couleur de la matière, posée EN DUR (donc modifiable à la main)
+                    mc=MAT_COLOR.get(r['matiere'])
+                    if mc:
+                        for rr in range(r0,r1+1):
+                            G.cell(rr,col).fill=fill(mc)
     for r0,r1,col in merges:
         if r1>r0: G.merge_cells(start_row=r0,start_column=col,end_row=r1,end_column=col)
 
     rg=f'B5:H{last}'
-    for _nom,_col,_mats in MATIERES:
-        t='+'.join(f'ISNUMBER(SEARCH(CHAR(10)&"{m}"&CHAR(10),B5))' for m in _mats)
-        G.conditional_formatting.add(rg, FormulaRule(formula=[f'({t})>0'], fill=fill(_col), stopIfTrue=True))
-    G.conditional_formatting.add(rg, FormulaRule(formula=['LEN(B5)=0'], fill=fill(GREY_L), stopIfTrue=True))
+    # Les couleurs de matière sont posées en dur : on peut donc recolorer n'importe
+    # quelle case à la main. Les seules règles conditionnelles sont les STATUTS,
+    # qui doivent justement l'emporter sur la couleur manuelle.
+    for _nom,_col in STATUTS:
+        G.conditional_formatting.add(rg, FormulaRule(formula=[f'ISNUMBER(SEARCH("⚑ {_nom}",B5))'],
+                                                     fill=fill(_col), stopIfTrue=True))
     G.freeze_panes='B5'
     for br in breaks: G.row_breaks.append(Break(id=br))
     setup_print(G, titles='1:3', area=f'A1:H{last}',
@@ -462,11 +488,12 @@ E_=f'{PL}$E${R0}:$E${R1}'; F_=f'{PL}$F${R0}:$F${R1}'; G_=f'{PL}$G${R0}:$G${R1}'
 H_=f'{PL}$H${R0}:$H${R1}'; I_=f'{PL}$I${R0}:$I${R1}'; J_=f'{PL}$J${R0}:$J${R1}'
 K_=f'{PL}$K${R0}:$K${R1}'; M_=f'{PL}$M${R0}:$M${R1}'; P_=f'{PL}$P${R0}:$P${R1}'
 Q_=f'{PL}$U${R0}:$U${R1}'   # Origine
-S_=f'{PL}$X${R0}:$X${R1}'   # conflit enseignant
-T_=f'{PL}$Y${R0}:$Y${R1}'   # conflit classe
-U_=f'{PL}$Z${R0}:$Z${R1}'   # doublon
-Z_=f'{PL}$AA${R0}:$AA${R1}' # partage incohérent
-OPT_=f'{PL}$W${R0}:$W${R1}' # cours en option
+S_=f'{PL}$Y${R0}:$Y${R1}'   # conflit enseignant
+T_=f'{PL}$Z${R0}:$Z${R1}'   # conflit classe
+U_=f'{PL}$AA${R0}:$AA${R1}' # doublon
+Z_=f'{PL}$AB${R0}:$AB${R1}' # partage incohérent
+OPT_=f'{PL}$X${R0}:$X${R1}' # cours en option
+STA_=f'{PL}$W${R0}:$W${R1}' # statut
 PR_=f'{PL}$S${R0}:$S${R1}'  # ligne principale
 ID_=f'{PL}$T${R0}:$T${R1}'  # ID séance
 NB_=f'{PL}$R${R0}:$R${R1}'  # nb groupes
@@ -836,6 +863,8 @@ LEG=([('__TITRE__','COULEUR DES CASES — une couleur par matière','','','')]
       ('Collège','7éme, 8éme et 9éme (8 groupes)','','',''),
       ('Secondaire','1ére, 2éme et 3éme (8 groupes)','','',''),
       ('Bac','Bac Eco, Bac SCE, Bac INFO','','','')]
+   + [('__TITRE__','STATUT — couleur PRIORITAIRE, posée dans la colonne Statut de Planning','','','')]
+   + [(_n,'Remplace la couleur de la matière ; apparaît dans la case précédé de ⚑','','','') for _n,_c in STATUTS]
    + [('__TITRE__','REPÈRES DANS LE TEXTE','','','')]
    + [('Case fusionnée','SÉANCE PARTAGÉE : elle n’est écrite qu’une fois et sa case couvre toutes les classes réunies sur ce créneau','','',''),
       ('Q-A','Ce groupe a la séance en semaines A : 14/09 · 28/09 · 12/10 · 26/10','','',''),
@@ -844,8 +873,10 @@ LEG=([('__TITRE__','COULEUR DES CASES — une couleur par matière','','','')]
       ('PONCT.','Séance exceptionnelle, non récurrente (ex. rattrapage)','','',''),
       ('EN LIGNE','Séance à distance (à renseigner dans la colonne Mode de Planning)','','',''),
       ('Case grisée','Aucune séance sur ce créneau','','',''),
+      ('Couleur libre','Toute case est recolorable à la main : les couleurs de matière sont posées en dur, pas en mise en forme conditionnelle','','',''),
       ('⚠ en rouge','Conflit horaire, doublon ou anomalie détectée automatiquement','','','')])
 FAM_COL={_n:_c for _n,_c,_m in MATIERES}
+FAM_COL.update({_n:_c for _n,_c in STATUTS})
 for i,row_ in enumerate(LEG):
     lab=row_[0]
     if lab=='__TITRE__':                      # sous-titre de bloc dans la légende
@@ -873,6 +904,7 @@ x=sband(x,'MODE D’EMPLOI')
 HOW=[('1','Modifier une séance existante','Dans la feuille Planning : changer l’horaire, la matière, l’enseignant, la salle ou le mode. La grille de la semaine et tous les indicateurs se mettent à jour SEULS (chaque case va chercher sa séance par son ID).'),
      ('2','Ajouter ou supprimer une séance','Ajouter la ligne dans Planning (recopier les formules des colonnes H et X à AD depuis la ligne du dessus). ATTENTION : la STRUCTURE des grilles (nombre de lignes par classe et cellules fusionnées) est figée à la construction — une séance ajoutée n’apparaîtra pas toute seule dans la grille. Demandez-moi de régénérer le classeur, ou reportez-la à la main.'),
      ('3','Renseigner une salle ou une séance en ligne','Colonnes Salle et Mode de Planning (menus déroulants). L’indication apparaît aussitôt dans la grille de la semaine.'),
+     ('3 bis','Mettre une séance en évidence','Deux moyens. (a) Colonne Statut de Planning (Annulé, Examen, Rattrapage…) : la case prend la couleur du statut, précédée de ⚑, et cela survit à une régénération du classeur. (b) Colorer la case directement dans la grille : c’est possible partout, les couleurs de matière étant posées en dur. Un statut l’emporte toujours sur une couleur posée à la main.'),
      ('4','Vérifier la fiabilité','Ouvrir la feuille Contrôles : la colonne Statut doit afficher « OK » partout.'),
      ('5','Imprimer ou envoyer en PDF','Chaque grille est déjà paramétrée : A4 paysage, 1 page de large, saut de page à chaque changement de cycle, en-têtes répétés. Fichier ▸ Exporter au format PDF.'),
      ('6','Préparer novembre','Dupliquer une grille d’octobre, renommer l’onglet, mettre à jour la cellule J4 (masquée) avec le nouveau code de semaine, ajouter la semaine dans Référentiels, puis ajouter ses lignes dans Planning (filtrer une semaine existante, copier, coller et changer Semaine / Période / Date).')]
@@ -892,7 +924,8 @@ WARN=[("Salle et Mode (présentiel / en ligne) sont absents du fichier d’origi
       ("Les 301 séances de septembre — soit 370 lignes groupe-séance — sont conservées à l’identique, y compris les fautes de frappe d’origine (colonne « Texte d’origine » de Planning)."),
       ("Les séances partagées entre plusieurs groupes (Physique de Melek, Espagnol, Italien, Français de Nassima…) sont conservées comme telles : un groupe par ligne dans Planning, reliés par un même ID séance, et une seule cellule fusionnée dans la grille."),
       ("17 décisions et points ambigus sont détaillés en bas de la feuille Contrôles. Trois méritent votre arbitrage : les Physique « /par quinzaine » de Melek, le STI du lundi en 3éme INFO, et le jeudi 15/10 (jour férié)."),
-      ("Chaque matière a sa propre couleur (17 teintes, liste en légende). Les grilles sont calculées par formules : à la première ouverture, laisser Excel recalculer (ou appuyer sur F9). Leur structure (lignes et fusions) est en revanche figée : voir le point 2 du mode d’emploi.")]
+      ("Chaque matière a sa propre couleur (17 teintes, liste en légende), posée EN DUR dans les cellules : vous pouvez donc recolorer n’importe quelle case à la main. Revers de la médaille : si vous changez la matière d’une séance dans Planning, le texte suit mais PAS la couleur — régénérez le classeur, ou corrigez la couleur vous-même."),
+      ("Les grilles sont calculées par formules : à la première ouverture, laisser Excel recalculer (ou appuyer sur F9). Leur structure (lignes et fusions) est en revanche figée : voir le point 2 du mode d’emploi.")]
 for w_ in WARN:
     So.merge_cells(start_row=x,start_column=2,end_row=x,end_column=5)
     c=So.cell(x,2,'•   '+w_); c.font=font(9); c.alignment=LTOP; c.border=BOX; c.fill=fill('FEF5E7')

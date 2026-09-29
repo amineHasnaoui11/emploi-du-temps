@@ -149,9 +149,45 @@ automatiquement la même couleur.
 La colonne *Classe* garde la couleur du **cycle**. Les repères `Q-A` / `Q-B` marquent les
 semaines où le groupe a la séance, `OPT` les cours au choix, `PONCT.` les séances non récurrentes.
 
-Le texte des cases est en **gras noir**, 12 pt. Le code couleur est posé par
-**mise en forme conditionnelle** : si vous changez la matière d'une séance dans
-`Planning`, la couleur suit toute seule.
+Le texte des cases est en **gras noir**, 12 pt.
+
+## Colorer une cellule soi-même
+
+Les couleurs de matière sont posées **en dur dans les cellules**, pas en mise en forme
+conditionnelle. Conséquence : **toute case est recolorable à la main**, dans les grilles
+comme dans `Planning`.
+
+C'est un changement délibéré. Dans les versions précédentes, des règles conditionnelles
+couvraient 100 % des cellules, et comme Excel donne toujours la priorité au conditionnel
+sur le formatage direct, une couleur posée à la main restait invisible.
+
+Il ne reste de mise en forme conditionnelle que là où elle doit justement l'emporter :
+les colonnes d'alerte de `Planning` et la colonne **Statut**.
+
+### La colonne Statut
+
+Pour une mise en évidence qui survit à une régénération du classeur, utilisez la colonne
+`Statut` de `Planning` (menu déroulant). La case de la grille prend alors la couleur du
+statut, précédée de `⚑`, et cette couleur l'emporte sur toute couleur manuelle.
+
+| Statut | Couleur |
+|---|---|
+| Annulé | `#F5A7A0` |
+| Examen / Devoir | `#F7D154` |
+| Rattrapage | `#C9A0DC` |
+| À confirmer | `#F9C784` |
+| Changement de salle | `#8FC7E8` |
+| Séance en ligne | `#9FE0C8` |
+
+### Ordre de priorité
+
+1. **Statut** (conditionnel) — l'emporte sur tout
+2. **Couleur posée à la main** — l'emporte sur la couleur de matière
+3. **Couleur de la matière** — posée à la construction
+
+⚠️ Revers de la médaille : si vous changez la matière d'une séance dans `Planning`,
+le texte de la grille suit mais **pas la couleur**. Régénérez le classeur
+(`python3 outils/build.py`) ou corrigez la couleur vous-même.
 
 ## Ce qui est vivant, ce qui est figé
 
